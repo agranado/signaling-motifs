@@ -24,6 +24,12 @@ x11();FeaturePlot(tiss_FACS,bmp.receptors,cols.use = c("lightgrey","blue"),nCol=
 ggsave((plots.folder,"bmpReceptors_tSNE.pdf",sep="")  , width = 14, height = 7, units = "in")
 
 
+# # # # https://hemberg-lab.github.io/scRNA.seq.course/cleaning-the-expression-matrix.html
+# # # # https://satijalab.org/seurat/conversion_vignette.html
+# # # # https://satijalab.org/seurat/pbmc3k_tutorial.html
+# # # # https://github.com/farrellja/URD/blob/master/Analyses/QuickStart/URD-QuickStart-AxialMesoderm.md
+
+
 # Alternatively, we start from scratch and cluster only using BMP
 # what I should have done from the beggining..
 
