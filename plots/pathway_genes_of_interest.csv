@@ -1,0 +1,68 @@
+	Type	Mouse Name	ENSEMBL	Human Name	Available from R&D	
+BMP	Ligands	BMP2			Mouse 	
+		BMP3			Human	
+		BMP4			Mouse 	
+		BMP5			Mouse 	
+		BMP6			Mouse 	
+		BMP7			Mouse 	
+		BMP8a	ENSG00000183682		Mouse 	
+		GDF2	ENSG00000263761		Mouse 	
+		BMP10			Mouse 	
+		BMP15			Human	
+		GDF1			Human	
+		GDF3			Mouse/Human	
+		GDF5			Mouse	
+		GDF6			Mouse	
+		GDF7			Mouse	
+		MSTN	ENSG00000138379		Mouse/Human/Rat	
+		GDF9			Mouse/Human	
+		GDF10			Human	
+		GDF11			Mouse/Human/Rat	
+		GDF15			Mouse/Human	
+		Nodal			Mouse/Human	
+		INHBA	ENSG00000122641		Mouse/Human/Rat	Activin A
+		INHBB	ENSG00000163083		Mouse/Human	Activin B
+		INHBC	ENSG00000175189		Mouse/Human	Activin C
+		INHBE	ENSG00000139269			Activin E
+		INHA	ENSG00000123999			
+		TGFb1	ENSG00000105329		Mouse/Human	
+		TGFb2	ENSG00000092969		Mouse/Human/Pig	
+		TGFb3	ENSG00000119699		Human	
+	R-Smads	Smad1				
+		Smad2				
+		Smad3				
+		Smad5				
+		Smad9	ENSG00000120693			
+	Co-Smad	Smad4				
+	Inhibitory Smad	Smad6				
+		Smad7				
+	Type I Receptors	ACVRL1				
+		ACVR1				
+		BMPR1A				
+		ACVR1B				
+		TGFBR1				
+		BMPR1B				
+		ACVR1C				
+	Type II Receptors	ACVR2A	ENSG00000121989			
+		ACVR2b				
+		BMPR2				
+		TGFBR2	ENSG00000163513			
+	Co-receptors	TGFBR3	ENSG00000069702			
+		ENG	ENSG00000106991			
+		CFC1	ENSG00000136698			
+		RGMa				
+		RGMB	ENSG00000174136			
+		HFE2				
+	Psuedo-receptors	Bambi				
+	Ligand antagonists	CHRD				
+		FST				
+		LEFTY1				
+		NOG				
+		CHRDL1				
+		CHRDL2				
+		GREM1				
+		GREM2				
+		CER1				
+		NBL1				
+		LEFTY2				
+	Target gene	Id1				
