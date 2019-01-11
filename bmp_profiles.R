@@ -67,6 +67,110 @@ isSpike(sce, "ERCC") <- grepl("ERCC-", rownames(sce))
 keep_feature<-rowSums(counts(sce)>0) >0
 sce<-sce[keep_feature,]
 
+# # # # # # # # # #
+ # # # # # # # # #
+# # # # # # # # # #
+
+#clustering of bmp profiles using Seurat native functions
+
+bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
+bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7","Bmp10","Bmp15",
+            "Bmp8a","Gdf2","Gdf1","Gdf3","Gdf5","Gdf6","Gdf7","Gdf9","Gdf10","Gdf11","Gdf15")
+bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
+
+#load main tiss object from bmp_FACS_Notebook.Rmd
+#Extracted from DotPlot function Seurat in Downloads/Seurat/plotting.R
+genes.plot = bmp.ligands
+
+cols.use = c("lightgrey", "blue")
+  col.min = -2.5
+  col.max = 2.5
+  dot.min = 0
+  dot.scale = 6
+  scale.by = 'radius'
+  scale.min = NA
+  scale.max = NA
+  group.by
+  plot.legend = FALSE
+  do.return = FALSE
+  x.lab.rot = FALSE
+
+scale.func <- switch(EXPR = scale.by, size = scale_size,
+        radius = scale_radius, stop("'scale.by' must be either 'size' or 'radius'"))
+
+
+retrieve.genes<-function(tiss,genes.plot){
+  #retrieves a list of genes from the Seurat object and calculates basic statistics
+  #returns a tidy data.frame will all the information
+      data.to.plot <- data.frame(FetchData(object = tiss, vars.all = genes.plot))
+      colnames(x = data.to.plot) <- genes.plot
+      data.to.plot$cell <- rownames(x = data.to.plot)
+      data.to.plot$id <- object@ident
+
+      data.to.plot %>% gather(
+        key = genes.plot,
+        value = expression,
+        -c(cell, id)
+      ) -> data.to.plot
+
+      data.to.plot %>%
+        group_by(id, genes.plot) %>%
+        summarize(
+          avg.exp = mean(expm1(x = expression)),
+          pct.exp = PercentAbove(x = expression, threshold = 0)
+        ) -> data.to.plot
+
+      data.to.plot %>%
+        ungroup() %>%
+        group_by(genes.plot) %>%
+        mutate(avg.exp.scale = scale(x = avg.exp)) %>%
+        mutate(avg.exp.scale = MinMax(
+          data = avg.exp.scale,
+          max = col.max,
+          min = col.min
+        )) ->  data.to.plot
+      data.to.plot$genes.plot <- factor(
+        x = data.to.plot$genes.plot,
+        levels = rev(x = genes.plot)
+      )
+    # data.to.plot$genes.plot <- factor(
+    #   x = data.to.plot$genes.plot,
+    #   levels = rev(x = sub(pattern = "-", replacement = ".", x = genes.plot))
+    # )
+    data.to.plot$pct.exp[data.to.plot$pct.exp < dot.min] <- NA
+    data.to.plot$pct.exp <- data.to.plot$pct.exp * 100
+
+    return(data.to.plot)
+}
+
+plot.dot.expression <-function(data.to.plot,genes.plot){
+p <- ggplot(data = data.to.plot, mapping = aes(x = genes.plot, y = id)) +
+  geom_point(mapping = aes(size = pct.exp, color = avg.exp.scale)) +
+  scale.func(range = c(0, dot.scale), limits = c(scale.min, scale.max)) +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+  x11();p
+}
+
+#takes the tidy data frame, converts the key-values to matrix and performs clustering
+cluster.variable<-function(data.to.plot,variable="pct.exp"){
+    all.clusters.id = unique(data.to.plot$id)
+    dat.matrix = matrix(0,length(all.clusters.id),length( levels(data.to.plot$genes.plot)  ))
+    colnames(dat.matrix)<-levels(data.to.plot$genes.plot)
+    row.names(dat.matrix)=levels(data.to.plot$id)
+    
+    for (c in as.numeric(all.clusters.id)){
+      dat.matrix[c,]=as.numeric(spread(data.to.plot[data.to.plot$id==c-1,c("genes.plot",variable)],genes.plot,variable))
+    }
+
+    return(dat.matrix)
+}
+
+#choose one variable and plot the heatmap
+dat.matrix= cluster.variable(data.to.plot,"avg.exp.scale")
+x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"Blues"))
+
+
+
 
 
 

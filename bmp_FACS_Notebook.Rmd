@@ -199,6 +199,10 @@ save(tiss, file=here("00_data_ingest", "11_global_robj", "FACS_all_preannotation
 # Add in metadata, annotations, and save.
 
 ```{r}
+
+# plot the location of a list of genes in the main tSNE plot
+x11();FeaturePlot(tiss,bmp.ligands, cols.use = c("lightgrey","blue"),nCol=4  )
+
 tiss@meta.data['cluster'] <- tiss@ident
 tiss@meta.data['cell'] <- rownames(tiss@meta.data)
 ```
