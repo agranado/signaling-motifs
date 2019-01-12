@@ -105,26 +105,28 @@ retrieve.genes<-function(tiss,genes.plot){
       data.to.plot <- data.frame(FetchData(object = tiss, vars.all = genes.plot))
       colnames(x = data.to.plot) <- genes.plot
       data.to.plot$cell <- rownames(x = data.to.plot)
-      data.to.plot$id <- object@ident
-
+      data.to.plot$id <- object@ident #extract tSNE cluster
+      data.to.plot$ontology = object@meta.data$cell_ontology_class #extract ontology class
+      data.to.plot$tissue = object@meta.data$tissue #tissue for each cell
+      # # # # # # # # #
       data.to.plot %>% gather(
         key = genes.plot,
         value = expression,
-        -c(cell, id)
+        -c(cell, id,ontology,tissue)
       ) -> data.to.plot
 
       data.to.plot %>%
-        group_by(id, genes.plot) %>%
+        group_by(id, tissue, ontology,genes.plot) %>% # NOTE doing it like this groups all variables might work but then you can index easily
         summarize(
-          avg.exp = mean(expm1(x = expression)),
-          pct.exp = PercentAbove(x = expression, threshold = 0)
+          avg.exp = mean(expm1(x = expression)), # e^x -1
+          pct.exp = PercentAbove(x = expression, threshold = 0) #any cell with expression >0
         ) -> data.to.plot
 
       data.to.plot %>%
         ungroup() %>%
         group_by(genes.plot) %>%
-        mutate(avg.exp.scale = scale(x = avg.exp)) %>%
-        mutate(avg.exp.scale = MinMax(
+        mutate(avg.exp.scale = scale(x = avg.exp)) %>% #scale average expression (not log)
+        mutate(avg.exp.scale = MinMax(   #make all values > abs(2.5) = 2.5
           data = avg.exp.scale,
           max = col.max,
           min = col.min
@@ -153,11 +155,11 @@ p <- ggplot(data = data.to.plot, mapping = aes(x = genes.plot, y = id)) +
 
 #takes the tidy data frame, converts the key-values to matrix and performs clustering
 cluster.variable<-function(data.to.plot,variable="pct.exp"){
-    all.clusters.id = unique(data.to.plot$id)
+    all.clusters.id = unique(data.to.plot$id) # # # # NOTE HERE the index is the one you used for retrieving the data, so be careful
     dat.matrix = matrix(0,length(all.clusters.id),length( levels(data.to.plot$genes.plot)  ))
     colnames(dat.matrix)<-levels(data.to.plot$genes.plot)
     row.names(dat.matrix)=levels(data.to.plot$id)
-    
+
     for (c in as.numeric(all.clusters.id)){
       dat.matrix[c,]=as.numeric(spread(data.to.plot[data.to.plot$id==c-1,c("genes.plot",variable)],genes.plot,variable))
     }
@@ -169,6 +171,12 @@ cluster.variable<-function(data.to.plot,variable="pct.exp"){
 dat.matrix= cluster.variable(data.to.plot,"avg.exp.scale")
 x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"Blues"))
 
+#plot heatmap using pheatmap
+# kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
+x11();pheatmap(dat.matrix,
+         show_rownames=T, cluster_cols=T, cluster_rows=T, scale="row",
+         cex=1, clustering_distance_rows="euclidean", cex=1,
+         clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=14)
 
 
 
