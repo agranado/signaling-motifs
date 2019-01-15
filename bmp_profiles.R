@@ -99,7 +99,11 @@ scale.func <- switch(EXPR = scale.by, size = scale_size,
         radius = scale_radius, stop("'scale.by' must be either 'size' or 'radius'"))
 
 
-retrieve.genes<-function(tiss,genes.plot){
+
+#TUtorial for filtering and heatmap https://bioconductor.org/help/course-materials/2016/BioC2016/ConcurrentWorkshops2/McDavid/MAITAnalysis.html
+
+#this funciton will calculate the average across a particular variable. In normal DotPlot will do by cluster
+retrieve.genes<-function(tiss,genes.plot,whicih.var){
   #retrieves a list of genes from the Seurat object and calculates basic statistics
   #returns a tidy data.frame will all the information
       data.to.plot <- data.frame(FetchData(object = tiss, vars.all = genes.plot))
@@ -109,14 +113,20 @@ retrieve.genes<-function(tiss,genes.plot){
       data.to.plot$ontology = object@meta.data$cell_ontology_class #extract ontology class
       data.to.plot$tissue = object@meta.data$tissue #tissue for each cell
       # # # # # # # # #
+      #Lets make it tidy
+      #here the genes are distributed as columns, cells as rows.
+      #WE want to create a new column called "genes.plot"
+      #The values of the DF are already the RNA counts so we just create the name "expression" and GATHER will take those values
+      #Extra columns correspond to CELLS and therefore we leave them as they are, they need to map to the cells in the original rows
       data.to.plot %>% gather(
         key = genes.plot,
         value = expression,
-        -c(cell, id,ontology,tissue)
+        -c(cell, id,ontology,tissue) #leave extra columns out
       ) -> data.to.plot
+      #until there the DF can be used in anyway:
 
       data.to.plot %>%
-        group_by(id, tissue, ontology,genes.plot) %>% # NOTE doing it like this groups all variables might work but then you can index easily
+        group_by(id,genes.plot) %>% # NOTE doing it like this groups all variables might work but then you can index easily
         summarize(
           avg.exp = mean(expm1(x = expression)), # e^x -1
           pct.exp = PercentAbove(x = expression, threshold = 0) #any cell with expression >0
@@ -146,6 +156,7 @@ retrieve.genes<-function(tiss,genes.plot){
 }
 
 plot.dot.expression <-function(data.to.plot,genes.plot){
+  names(data.to.plot)[1]<-"id"
 p <- ggplot(data = data.to.plot, mapping = aes(x = genes.plot, y = id)) +
   geom_point(mapping = aes(size = pct.exp, color = avg.exp.scale)) +
   scale.func(range = c(0, dot.scale), limits = c(scale.min, scale.max)) +
