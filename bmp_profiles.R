@@ -7,6 +7,9 @@ library(tidyr)
 library(dplyr)
 library(RColorBrewer)
 library(gplots)
+library(pheatmap)
+library(grid)
+library(gridExtra)
 
 sce.analysis<-function(){
     ## ------------------------------------------------------------------------
@@ -84,9 +87,25 @@ bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7","Bmp10","Bmp15",
             "Bmp8a","Gdf2","Gdf1","Gdf3","Gdf5","Gdf6","Gdf7","Gdf9","Gdf10","Gdf11","Gdf15")
 bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
 
+notch.all<-c(
+"Dll1",
+"Dll3",
+"Dll4",
+"Dtx1",
+"Jag1",
+"Jag2",
+"Adam10",
+"Psen1",
+"Psen2",
+"Psenen",
+"Notch1",
+"Notch2",
+"Notch3",
+"Notch4")
+
 #load main tiss object from bmp_FACS_Notebook.Rmd
 #Extracted from DotPlot function Seurat in Downloads/Seurat/plotting.R
-genes.plot = bmp.ligands
+genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
 
 cols.use = c("lightgrey", "blue")
   col.min = -2.5
@@ -104,7 +123,7 @@ cols.use = c("lightgrey", "blue")
 scale.func <- switch(EXPR = scale.by, size = scale_size,
         radius = scale_radius, stop("'scale.by' must be either 'size' or 'radius'"))
 
-
+#local seurat functions
 PercentAbove <- function(x, threshold){
   return(length(x = x[x > threshold]) / length(x = x))
 }
@@ -119,15 +138,16 @@ MinMax <- function(data, min, max) {
 #TUtorial for filtering and heatmap https://bioconductor.org/help/course-materials/2016/BioC2016/ConcurrentWorkshops2/McDavid/MAITAnalysis.html
 #this function needs the big Seurat object
 #the data.frame returned can be saved and loaded so this function wont be necessary every time
-fetch.data<-function(){
+fetch.data<-function(tiss,genes.plot){
   data.to.plot <- data.frame(FetchData(object = tiss, vars.all = genes.plot))
   colnames(x = data.to.plot) <- genes.plot
   data.to.plot$cell <- rownames(x = data.to.plot)
-  data.to.plot$id <- object@ident #extract tSNE cluster
-  data.to.plot$ontology = object@meta.data$cell_ontology_class #extract ontology class
-  data.to.plot$tissue = object@meta.data$tissue #tissue for each cell
+  data.to.plot$id <- tiss@ident #extract tSNE cluster
+  data.to.plot$ontology = tiss@meta.data$cell_ontology_class #extract ontology class
+  data.to.plot$tissue = tiss@meta.data$tissue #tissue for each cell
   return(data.to.plot)
-}
+} # bug Jan 16 : until here works fine bugID namesBmp4
+
 #this funciton will calculate the average across a particular variable. In normal DotPlot will do by cluster
 retrieve.genes<-function(data.to.plot,genes.plot,which.var){
   #retrieves a list of genes from the Seurat object and calculates basic statistics
@@ -206,11 +226,24 @@ cluster.variable<-function(data.to.plot,variable="pct.exp"){
 
 #choose one variable and plot the heatmap
 #load previously saved data.to.plot
-load("data.to.plot.rdata")
-which.var = "ontology"
-quant.var = "pct.exp"
+# START SCRIPT
+df.file ="data.to.plot.rdata"
 
-data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var)
+if(file.exists(df.file)){
+  load(df.file)
+}else{
+  #create the file by fetching from the Seurat object
+  print("Fetching Data Frame from Seurat object .../n")
+  data.to.plot=fetch.data(tiss,genes.plot)
+  save(data.to.plot, file = df.file) #and save
+}
+
+
+which.var = "ontology" #manual annotation from tabula muris paper
+quant.var = "pct.exp" #percent of cells with positive expression values, counts fraction of cells > 0 counts
+
+print("Creating tidy data frame.../n")
+data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
 dat.matrix = cluster.variable(data.to.plot,quant.var)
 
 
@@ -218,19 +251,64 @@ x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"Blues"))
 
 #plot heatmap using pheatmap
 # kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
+scale.which = "none"
 p1=pheatmap(dat.matrix,
-         show_rownames=T, cluster_cols=T, cluster_rows=T, scale="row",
+         show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
          cex=1, clustering_distance_rows="euclidean", cex=1,
          clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=14)
 
 p2=pheatmap(dat.matrix,
-        show_rownames=T, cluster_cols=T, cluster_rows=T, scale="row",
+        show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
         cex=1, clustering_distance_rows="euclidean", cex=1,
         clustering_distance_cols="euclidean", clustering_method="complete")
 
 plot_list = list(p1[[4]],p2[[4]])
 x11();
 g<-do.call(grid.arrange,plot_list)
-
-
+#bug ID nameBmp4 SOLVED Jan 16th
+### let's filter the matrix
 #
+barplot.sort.filter<-function(dat.matrix,threshold = 100){
+    df.matrix =as.data.frame(colSums(dat.matrix)) #total pct expressed
+    colnames(df.matrix)[1]="sum.pct" #name variable
+
+    df.matrix$gene.name = row.names(df.matrix) #create gene column
+    df.matrix =df.matrix[with(df.matrix,order(sum.pct)), ] #sort based on the statistic
+
+    #factor the column such that ggplot does not plot it in alphabetical other (default behavior)
+    #the order in the factor/levels will be the order that ggplot will use in the x-axis
+    df.matrix$gene.name = factor(df.matrix$gene.name,levels = df.matrix$gene.name)
+
+    x11()
+    # Basic barplot
+    p<-ggplot(data=df.matrix, aes(x=gene.name, y=sum.pct)) +
+      geom_bar(stat="identity")
+    p
+    # Horizontal bar plot
+    p + coord_flip()
+
+    #filter and returned
+    pass.genes = as.vector(df.matrix[df.matrix$sum.pct>100,]$gene.name)
+    new.matrix = dat.matrix[,pass.genes]
+    return(new.matrix)
+}
+
+x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"Blues"))
+
+#plot heatmap using pheatmap
+# kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
+dat.matrix = new.matrix
+scale.which = "none"
+p1=pheatmap(dat.matrix,
+         show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+         cex=1, clustering_distance_rows="euclidean", cex=1,
+         clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=14)
+
+p2=pheatmap(dat.matrix,
+        show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+        cex=1, clustering_distance_rows="euclidean", cex=1,
+        clustering_distance_cols="euclidean", clustering_method="complete")
+
+plot_list = list(p1[[4]],p2[[4]])
+x11();
+g<-do.call(grid.arrange,plot_list)
