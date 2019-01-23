@@ -159,11 +159,15 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
       #WE want to create a new column called "genes.plot"
       #The values of the DF are already the RNA counts so we just create the name "expression" and GATHER will take those values
       #Extra columns correspond to CELLS and therefore we leave them as they are, they need to map to the cells in the original rows
+      # data.to.plot %>% gather(
+      #   key = genes.plot,
+      #   value = expression,
+      #   -c(cell, id,ontology,tissue) #leave extra columns out
+      # ) -> data.to.plot
+
       data.to.plot %>% gather(
-        key = genes.plot,
-        value = expression,
-        -c(cell, id,ontology,tissue) #leave extra columns out
-      ) -> data.to.plot
+        key=genes.plot, c(1:length(genes.plot)) , #gather only the columns for genes
+        value = expression) -> data.to.plot
       #until there the DF can be used in anyway:
 
       data.to.plot %>% #group_by_at uses strings as arguments for indexing the data frame
@@ -242,12 +246,22 @@ if(file.exists(df.file)){
 which.var = "ontology" #manual annotation from tabula muris paper
 quant.var = "pct.exp" #percent of cells with positive expression values, counts fraction of cells > 0 counts
 
+#let's create a new variable combining cell type and tissue (as Sarah did)
+data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep="_",remove=F) -> data.to.plot
+
 print("Creating tidy data frame.../n")
 data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
 dat.matrix = cluster.variable(data.to.plot,quant.var)
 
+#HEAT MAP ANNOTATION:
+class.combinations =do.call(rbind,strsplit(row.names(dat.matrix),","))
+colnames(class.combinations)<-c("Tissue","Type")
+class.combinations<-as.data.frame(class.combinations)
+#for heatmap we can put colors on tissue and celltypes
 
-x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"Blues"))
+
+
+x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"YlGnBu"))
 
 #plot heatmap using pheatmap
 # kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
@@ -295,20 +309,74 @@ barplot.sort.filter<-function(dat.matrix,threshold = 100){
 
 x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"Blues"))
 
+
+#### CLUSTER HEATMAP BY TYPE / TISSUE
+
+class.combinations = as.data.frame(do.call(rbind,strsplit(row.names(dat.matrix),",")))
+row.names(class.combinations)<-row.names(dat.matrix)
+names(class.combinations)<-c("Tissue","Type")
+
+#colors
+distinct.colors = list()
+celltype.colors<-as.vector(read.csv("celltype.colors.csv",header=F))
+celltype.colors = celltype.colors$V1
+names(celltype.colors)<-levels(class.combinations$Type)
+
+annotation.colors$Type  =celltype.colors
+
+
+tissue.colors<-as.vector(read.csv("tissuecolor.csv",header=F))
+tissue.colors = tissue.colors$V1
+names(tissue.colors)<-levels(class.combinations$Tissue)
+
+annotation.colors$Tissue  =tissue.colors
+
+
+x11();p2=pheatmap(dat.matrix,
+             show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+             cex=1, clustering_distance_rows="euclidean", cex=1,
+             clustering_distance_cols="euclidean", clustering_method="complete",
+             annotation_row = class.combinations,cutree_rows = 15,
+             annotation_colors = annotation.colors)
+
+# # # # #
+ # # # # 
+distinct.colors = c("#5cc69a",
+"#c05ac5",
+"#5dbb4d",
+"#7362cf",
+"#b5b233",
+"#7183ca",
+"#dd8c30",
+"#48afd5",
+"#d24c3d",
+"#379179",
+"#d34787",
+"#42843d",
+"#b46ea9",
+"#99b25f",
+"#c2646f",
+"#73732b",
+"#d29d61",
+"#9e5f2e")
+
+
+
+
 #plot heatmap using pheatmap
 # kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
-dat.matrix = new.matrix
-scale.which = "none"
-p1=pheatmap(dat.matrix,
-         show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-         cex=1, clustering_distance_rows="euclidean", cex=1,
-         clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=14)
-
-p2=pheatmap(dat.matrix,
-        show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-        cex=1, clustering_distance_rows="euclidean", cex=1,
-        clustering_distance_cols="euclidean", clustering_method="complete")
-
-plot_list = list(p1[[4]],p2[[4]])
-x11();
-g<-do.call(grid.arrange,plot_list)
+# dat.matrix = new.matrix
+# scale.which = "none"
+# p1=pheatmap(dat.matrix,
+#          show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+#          cex=1, clustering_distance_rows="euclidean", cex=1,
+#          clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=14)
+#
+# p2=pheatmap(dat.matrix,
+#         show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+#         cex=1, clustering_distance_rows="euclidean", cex=1,
+#         clustering_distance_cols="euclidean", clustering_method="complete")
+#
+# plot_list = list(p1[[4]],p2[[4]])
+# x11();
+# g<-do.call(grid.arrange,plot_list)
