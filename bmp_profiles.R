@@ -82,30 +82,8 @@ sce.analysis<-function(){
 
 #clustering of bmp profiles using Seurat native functions
 
-bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
-bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7","Bmp10","Bmp15",
-            "Bmp8a","Gdf2","Gdf1","Gdf3","Gdf5","Gdf6","Gdf7","Gdf9","Gdf10","Gdf11","Gdf15")
-bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
-
-notch.all<-c(
-"Dll1",
-"Dll3",
-"Dll4",
-"Dtx1",
-"Jag1",
-"Jag2",
-"Adam10",
-"Psen1",
-"Psen2",
-"Psenen",
-"Notch1",
-"Notch2",
-"Notch3",
-"Notch4")
-
 #load main tiss object from bmp_FACS_Notebook.Rmd
 #Extracted from DotPlot function Seurat in Downloads/Seurat/plotting.R
-genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
 
 cols.use = c("lightgrey", "blue")
   col.min = -2.5
@@ -133,7 +111,6 @@ MinMax <- function(data, min, max) {
   data2[data2 < min] <- min
   return(data2)
 }
-
 
 #TUtorial for filtering and heatmap https://bioconductor.org/help/course-materials/2016/BioC2016/ConcurrentWorkshops2/McDavid/MAITAnalysis.html
 #this function needs the big Seurat object
@@ -202,14 +179,7 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
     return(data.to.plot)
 }
 
-plot.dot.expression <-function(data.to.plot,genes.plot){
-  names(data.to.plot)[1]<-"id"
-  p <- ggplot(data = data.to.plot, mapping = aes(x = genes.plot, y = id)) +
-  geom_point(mapping = aes(size = pct.exp, color = avg.exp.scale)) +
-  scale.func(range = c(0, dot.scale), limits = c(scale.min, scale.max)) +
-  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),text=element_text(size =20))
-  x11();p
-}
+
 #takes the tidy data frame, converts the key-values to matrix and performs clustering
 cluster.variable<-function(data.to.plot,variable="pct.exp"){
     names(data.to.plot)[1]<-"id"
@@ -228,60 +198,77 @@ cluster.variable<-function(data.to.plot,variable="pct.exp"){
     return(dat.matrix)
 }
 
-#choose one variable and plot the heatmap
-#load previously saved data.to.plot
-# START SCRIPT
-df.file ="data.to.plot.rdata"
-
-if(file.exists(df.file)){
-  load(df.file)
-}else{
-  #create the file by fetching from the Seurat object
-  print("Fetching Data Frame from Seurat object .../n")
-  data.to.plot=fetch.data(tiss,genes.plot)
-  save(data.to.plot, file = df.file) #and save
+check.n.extract<-function(df.file){
+  if(file.exists(df.file)){
+    load(df.file)
+  }else{
+    #create the file by fetching from the Seurat object
+    print("Fetching Data Frame from Seurat object .../n")
+    data.to.plot=fetch.data(tiss,genes.plot)
+    save(data.to.plot, file = df.file) #and save
+  }
 }
 
+##############
+#MAIN function:
+load.data<-function(pathway="bmp",  which.var = "ontology" ,quant.var = "pct.exp"){
+  #choose one variable and plot the heatmap, load previously saved data.to.plot
 
-which.var = "ontology" #manual annotation from tabula muris paper
-quant.var = "pct.exp" #percent of cells with positive expression values, counts fraction of cells > 0 counts
+  if(pathway == "bmp"){
+    f.index =1
+  }else if(pathway=="notch"){
+    f.index = 2
+  }else
+    stop("pathway does not exist ")
 
-#let's create a new variable combining cell type and tissue (as Sarah did)
-data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep="_",remove=F) -> data.to.plot
+  df.files =c("data.to.plot","data.to.notch") #extracted from tiss based on a list of genes
+  df.file = paste(df.files[f.index],".rdata",sep="")
+  data.to.plot = eval(parse(text=df.files[f.index])) #the way I saved the variables have different names
+  #let's create a new variable combining cell type and tissue (as Sarah did)
+  data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep=",",remove=F) -> data.to.plot
 
-print("Creating tidy data frame.../n")
-data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
-dat.matrix = cluster.variable(data.to.plot,quant.var)
+  #manual annotation from tabula muris paper
+  #percent of cells with positive expression values, counts fraction of cells > 0 counts
 
-#HEAT MAP ANNOTATION:
-class.combinations =do.call(rbind,strsplit(row.names(dat.matrix),","))
-colnames(class.combinations)<-c("Tissue","Type")
-class.combinations<-as.data.frame(class.combinations)
-#for heatmap we can put colors on tissue and celltypes
+  print("Creating tidy data frame.../n")
+  data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
+  dat.matrix = cluster.variable(data.to.plot,quant.var)
+  return(list(data.to.plot,dat.matrix))
+}
+#get the annotated genes (manually curated lists)
+pathway.genes<-function(pathway ="bmp"){
+  bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
+  bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7","Bmp10","Bmp15",
+              "Bmp8a","Gdf2","Gdf1","Gdf3","Gdf5","Gdf6","Gdf7","Gdf9","Gdf10","Gdf11","Gdf15")
+  bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
+
+  notch.all<-c(
+  "Dll1",
+  "Dll3",
+  "Dll4",
+  "Dtx1",
+  "Jag1",
+  "Jag2",
+  "Adam10",
+  "Psen1",
+  "Psen2",
+  "Psenen",
+  "Notch1",
+  "Notch2",
+  "Notch3",
+  "Notch4")
 
 
+    if(pathway =="bmp"){
+      genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
+    }else if(pathway=="notch"){
+      genes.plot = notch.all
+    }
 
-x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"YlGnBu"))
-
-#plot heatmap using pheatmap
-# kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
-scale.which = "none"
-p1=pheatmap(dat.matrix,
-         show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-         cex=1, clustering_distance_rows="euclidean", cex=1,
-         clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=14)
-
-p2=pheatmap(dat.matrix,
-        show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-        cex=1, clustering_distance_rows="euclidean", cex=1,
-        clustering_distance_cols="euclidean", clustering_method="complete")
-
-plot_list = list(p1[[4]],p2[[4]])
-x11();
-g<-do.call(grid.arrange,plot_list)
-#bug ID nameBmp4 SOLVED Jan 16th
-### let's filter the matrix
-#
+    return (genes.plot)
+}
+#optional:
+#threshold is the sum across tissues for pct.exp  cells, it is a problem with bmp:
 barplot.sort.filter<-function(dat.matrix,threshold = 100){
     df.matrix =as.data.frame(colSums(dat.matrix)) #total pct expressed
     colnames(df.matrix)[1]="sum.pct" #name variable
@@ -307,38 +294,93 @@ barplot.sort.filter<-function(dat.matrix,threshold = 100){
     return(new.matrix)
 }
 
-x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"Blues"))
+
+##############
+##############
+#plot functions
+
+plot.heatmap.2 <-function(dat.matrix){
+    x11();heatmap.2(dat.matrix,trace = "none",col=brewer.pal(9,"YlGnBu"))
+}
+
+plot.dot.expression <-function(data.to.plot,genes.plot){
+  names(data.to.plot)[1]<-"id"
+  p <- ggplot(data = data.to.plot, mapping = aes(x = genes.plot, y = id)) +
+  geom_point(mapping = aes(size = pct.exp, color = avg.exp.scale)) +
+  scale.func(range = c(0, dot.scale), limits = c(scale.min, scale.max)) +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),text=element_text(size =20))
+  x11();p
+}
+
+#plot heatmap using pheatmap
+# kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
+plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10){
+    scale.which = "none"
+    p1=pheatmap(dat.matrix,
+             show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+             cex=1, clustering_distance_rows="euclidean", cex=1,
+             clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=kmeans_k)
+
+    p2=pheatmap(dat.matrix,
+            show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+            cex=1, clustering_distance_rows="euclidean", cex=1,
+            clustering_distance_cols="euclidean", clustering_method="complete")
+
+    x11()
+    if(mode=="single"){
+      p2
+    }else if(mode=="kmeans"){
+      p1
+    }else if(mode=="both"){
+      plot_list = list(p1[[4]],p2[[4]])
+
+      g<-do.call(grid.arrange,plot_list)
+    }
+}
+#bug ID nameBmp4 SOLVED Jan 16th
+### let's filter the matrix
+#
 
 
 #### CLUSTER HEATMAP BY TYPE / TISSUE
+heatmap.annotations<-function(dat.matrix,color.file1 ="celltype.colors.csv" ,color.file2="tissuecolor.csv"){
 
-class.combinations = as.data.frame(do.call(rbind,strsplit(row.names(dat.matrix),",")))
-row.names(class.combinations)<-row.names(dat.matrix)
-names(class.combinations)<-c("Tissue","Type")
+  class.combinations = as.data.frame(do.call(rbind,strsplit(row.names(dat.matrix),",")))
+  row.names(class.combinations)<-row.names(dat.matrix)
+  names(class.combinations)<-c("Tissue","Type")
 
-#colors
-distinct.colors = list()
-celltype.colors<-as.vector(read.csv("celltype.colors.csv",header=F))
-celltype.colors = celltype.colors$V1
-names(celltype.colors)<-levels(class.combinations$Type)
+  #colors
+  annotation.colors = list()
+  celltype.colors<-as.vector(read.csv(color.file1,header=F))
+  celltype.colors = celltype.colors$V1
+  names(celltype.colors)<-levels(class.combinations$Type)
 
-annotation.colors$Type  =celltype.colors
+  annotation.colors$Type  =celltype.colors
+
+  tissue.colors<-as.vector(read.csv(color.file2,header=F))
+  tissue.colors = tissue.colors$V1
+  names(tissue.colors)<-levels(class.combinations$Tissue)
+
+  annotation.colors$Tissue  =tissue.colors
+
+  return(list(class.combinations,annotation.colors))
+}
 
 
-tissue.colors<-as.vector(read.csv("tissuecolor.csv",header=F))
-tissue.colors = tissue.colors$V1
-names(tissue.colors)<-levels(class.combinations$Tissue)
+fancy.heatmap <-function(dat.matrix, nclusters = 15){
 
-annotation.colors$Tissue  =tissue.colors
-
-
-x11();p2=pheatmap(dat.matrix,
+  #get annotations: (with default colors)
+  ann.list = heatmap.annotations(dat.matrix)
+  class.combinations = ann.list[[1]]
+  annotation.colors = ann.list[[2]]
+  x11();
+  p2=pheatmap(dat.matrix,
              show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
              cex=1, clustering_distance_rows="euclidean", cex=1,
              clustering_distance_cols="euclidean", clustering_method="complete",
-             annotation_row = class.combinations,cutree_rows = 15,
+             annotation_row = class.combinations,cutree_rows = nclusters,
              annotation_colors = annotation.colors)
-
+}
 # # # # #
  # # # # 
 distinct.colors = c("#5cc69a",
