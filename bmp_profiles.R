@@ -143,9 +143,15 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
       # ) -> data.to.plot
 
       data.to.plot %>% gather(
-        key=genes.plot, c(1:length(genes.plot)) , #gather only the columns for genes
+        key=genes.plot, c(genes.plot) , #gather only the columns for genes
         value = expression) -> data.to.plot
-      #until there the DF can be used in anyway:
+      #NOTE if genes.plot has less genes than those in the data.to.plot object, the non selected
+      #genes will NOT be gathered and therefore we need to remove them:
+
+
+      # if there are genes that were not grouped bc the list is shorter
+      # select only relevant fields
+      data.to.plot %>% select(cell, id, cell_type,ontology,tissue,genes.plot,expression) -> data.to.plot
 
       data.to.plot %>% #group_by_at uses strings as arguments for indexing the data frame
         group_by_at(c(which.var,"genes.plot")) %>% # NOTE doing it like this groups all variables might work but then you can index easily
@@ -244,8 +250,8 @@ load.data<-function(pathway="bmp",  which.var = "ontology" ,quant.var = "pct.exp
 #get the annotated genes (manually curated lists)
 pathway.genes<-function(pathway ="bmp"){
   bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
-  bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7","Bmp10","Bmp15",
-              "Bmp8a","Gdf2","Gdf1","Gdf3","Gdf5","Gdf6","Gdf7","Gdf9","Gdf10","Gdf11","Gdf15")
+  bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7",
+              "Bmp8a","Gdf3","Gdf9","Gdf10","Gdf11","Gdf15")
   bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
 
   notch.all<-c(
@@ -324,12 +330,12 @@ plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10){
     scale.which = "none"
     p1=pheatmap(dat.matrix,
              show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-             cex=1, clustering_distance_rows="euclidean", cex=1,
+             cex=1.3, clustering_distance_rows="euclidean", cex=1,
              clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=kmeans_k)
 
     p2=pheatmap(dat.matrix,
             show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-            cex=1, clustering_distance_rows="euclidean", cex=1,
+            cex=1.3, clustering_distance_rows="euclidean", cex=1,
             clustering_distance_cols="euclidean", clustering_method="complete")
 
     x11()
