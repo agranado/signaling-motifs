@@ -149,7 +149,7 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
 
       data.to.plot %>% #group_by_at uses strings as arguments for indexing the data frame
         group_by_at(c(which.var,"genes.plot")) %>% # NOTE doing it like this groups all variables might work but then you can index easily
-        summarize(
+        dplyr::summarize(
           avg.exp = mean(expm1(x = expression)), # e^x -1
           pct.exp = PercentAbove(x = expression, threshold = 0) #any cell with expression >0
         ) -> data.to.plot
@@ -211,6 +211,7 @@ check.n.extract<-function(df.file){
 
 ##############
 #MAIN function:
+
 load.data<-function(pathway="bmp",  which.var = "ontology" ,quant.var = "pct.exp"){
   #choose one variable and plot the heatmap, load previously saved data.to.plot
 
@@ -223,13 +224,14 @@ load.data<-function(pathway="bmp",  which.var = "ontology" ,quant.var = "pct.exp
 
   df.files =c("data.to.plot","data.to.notch") #extracted from tiss based on a list of genes
   df.file = paste(df.files[f.index],".rdata",sep="")
+  load(df.file)
   data.to.plot = eval(parse(text=df.files[f.index])) #the way I saved the variables have different names
   #let's create a new variable combining cell type and tissue (as Sarah did)
   data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep=",",remove=F) -> data.to.plot
 
   #manual annotation from tabula muris paper
   #percent of cells with positive expression values, counts fraction of cells > 0 counts
-
+  genes.plot = pathway.genes(pathway)
   print("Creating tidy data frame.../n")
   data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
   dat.matrix = cluster.variable(data.to.plot,quant.var)
@@ -383,6 +385,72 @@ fancy.heatmap <-function(dat.matrix, nclusters = 15){
 }
 # # # # #
  # # # # 
+  library(ggbiplot)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ pca.bi.plot<-function(pathway = "notch", which.var = "ontology",quant.var = "pct.exp"){
+  #1 load data
+  test.list = load.data(pathway=pathway,which.var = which.var, quant.var = quant.var)
+  data.to.plot = test.list[[1]]
+  dat.matrix = test.list[[2]]
+  #2 load annotations
+  ann.list = heatmap.annotations(dat.matrix) #with default color file parameters for NOTCH only
+
+  groups = FALSE
+
+  if(groups){
+      g <- ggbiplot(prcomp(dat.matrix,center=T),choices=1:2, obs.scale = 1, var.scale = 1,
+              groups = df.notch$Tissue, ellipse = F,
+              circle = F,varname.size =5,varname.adjust = 1.8)
+              g <- g + scale_color_discrete(name = '')
+              g <- g + theme(legend.direction = 'horizontal',
+               legend.position = 'top');
+      x11();g
+            }else{
+      g <- ggbiplot(prcomp(dat.matrix,center=T),choices=1:2, obs.scale = 1, var.scale = 1,
+              ellipse = F,
+              circle = F,varname.size =5,varname.adjust = 1.8)
+              g <- g + scale_color_discrete(name = '')
+              g <- g + theme(legend.direction = 'horizontal',
+               legend.position = 'top');
+      x11();g
+
+            }
+
+}
+
+
+
+
 distinct.colors = c("#5cc69a",
 "#c05ac5",
 "#5dbb4d",
