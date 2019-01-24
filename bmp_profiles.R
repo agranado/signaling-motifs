@@ -211,15 +211,19 @@ check.n.extract<-function(df.file){
 
 ##############
 #MAIN function:
-load.data<-function(pathway="bmp",  which.var = "ontology" ,quant.var = "pct.exp"){
+load.data<-function(pathway="bmp", which.var = "ontology" ,quant.var = "pct.exp"){
   #choose one variable and plot the heatmap, load previously saved data.to.plot
 
   if(pathway == "bmp"){
     f.index =1
+
   }else if(pathway=="notch"){
     f.index = 2
+
   }else
     stop("pathway does not exist ")
+
+
 
   df.files =c("data.to.plot","data.to.notch") #extracted from tiss based on a list of genes
   df.file = paste(df.files[f.index],".rdata",sep="")
@@ -229,7 +233,7 @@ load.data<-function(pathway="bmp",  which.var = "ontology" ,quant.var = "pct.exp
 
   #manual annotation from tabula muris paper
   #percent of cells with positive expression values, counts fraction of cells > 0 counts
-
+  #genes.plot = pathway.genes(pathway)
   print("Creating tidy data frame.../n")
   data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
   dat.matrix = cluster.variable(data.to.plot,quant.var)
@@ -367,22 +371,86 @@ heatmap.annotations<-function(dat.matrix,color.file1 ="celltype.colors.csv" ,col
 }
 
 
-fancy.heatmap <-function(dat.matrix, nclusters = 15){
+fancy.heatmap <-function(dat.matrix, nclusters = 15,cex.row = 2,cex.col = 3){
 
   #get annotations: (with default colors)
   ann.list = heatmap.annotations(dat.matrix)
   class.combinations = ann.list[[1]]
   annotation.colors = ann.list[[2]]
+  #Format: cell type (tissue)
+  row.names(class.combinations)<-paste(class.combinations$Type," (",class.combinations$Tissue,")",sep="")
+  row.names(dat.matrix)<-paste(class.combinations$Type," (",class.combinations$Tissue,")",sep="")
+
   x11();
   p2=pheatmap(dat.matrix,
              show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-             cex=1, clustering_distance_rows="euclidean", cex=1,
+             cex=1, clustering_distance_rows="euclidean", cex=2,
              clustering_distance_cols="euclidean", clustering_method="complete",
              annotation_row = class.combinations,cutree_rows = nclusters,
-             annotation_colors = annotation.colors)
+             annotation_colors = annotation.colors,
+             fontsize_row = cex.row, fontsize_col = cex.col)
+}
+
+make.legend <-function(annotation.colors,idx=1,text.size=18){
+  all.tissues = names(annotation.colors[[idx]]);
+  color.table = data.frame(tissue =all.tissues,ymin = 0:(length(all.tissues)-1),ymax =0:(length(all.tissues)-1))
+  color.table$ymax = color.table$ymax +1
+  color.table$color = as.vector(annotation.colors[[idx]])
+  color.table$xmin = rep(0,length(all.tissues))
+  color.table$xmax = rep(1,length(all.tissues))
+  x11();ggplot(color.table, aes (xmin = xmin,xmax =xmax, ymin = ymin, ymax = ymax))+
+  geom_rect(colour="white",alpha=0.9,aes(fill=tissue)) +
+  scale_fill_manual(values = color.table$color,guide=FALSE) +
+  geom_text(aes(x=xmax+0.1, y=(ymin+ymax)/2, label=tissue),hjust =0, size = text.size) +
+  coord_cartesian(xlim = c(0, 5), # This focuses the x-axis on the range of interest
+                      clip = 'off') +   # This keeps the labels from disappearing
+      theme(plot.margin = unit(c(1,3,1,1), "lines")) +
+  theme_bw() +
+  theme(axis.text.y = element_blank(),
+          axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+          axis.ticks.y = element_blank(), panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(), panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()) + xlab("") + ylab("") +
+          ggtitle("Legend")
 }
 # # # # #
  # # # # 
+
+
+pca.bi.plot<-function(pathway = "notch", which.var = "ontology",quant.var = "pct.exp"){
+  #1 load data
+  test.list = load.data(pathway=pathway,which.var = which.var, quant.var = quant.var)
+  data.to.plot = test.list[[1]]
+  dat.matrix = test.list[[2]]
+  #2 load annotations
+  ann.list = heatmap.annotations(dat.matrix) #with default color file parameters for NOTCH only
+
+  group = FALSE
+  library(ggbiplot)
+  if(groups){
+      g <- ggbiplot(prcomp(dat.matrix,center=T),choices=1:2, obs.scale = 1, var.scale = 1,
+              groups = df.notch$Tissue, ellipse = F,
+              circle = F,varname.size =5,varname.adjust = 1.8)
+              g <- g + scale_color_discrete(name = '')
+              g <- g + theme(legend.direction = 'horizontal',
+               legend.position = 'top');
+      x11();g
+            }else{
+      g <- ggbiplot(prcomp(dat.matrix,center=T),choices=1:2, obs.scale = 1, var.scale = 1,
+              ellipse = F,
+              circle = F,varname.size =5,varname.adjust = 1.8)
+              g <- g + scale_color_discrete(name = '')
+              g <- g + theme(legend.direction = 'horizontal',
+               legend.position = 'top');
+      x11();g
+
+            }
+
+}
+
+
+
+
 distinct.colors = c("#5cc69a",
 "#c05ac5",
 "#5dbb4d",
