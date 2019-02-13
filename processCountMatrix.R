@@ -257,36 +257,44 @@ save(tiss, file=here("00_data_ingest", "11_global_robj", "FACS_all_preannotation
 
 # Add in metadata, annotations, and save.
 
-```{r}
-
 # plot the location of a list of genes in the main tSNE plot
 x11();FeaturePlot(tiss,bmp.ligands, cols.use = c("lightgrey","blue"),nCol=4  )
 
 tiss@meta.data['cluster'] <- tiss@ident
 tiss@meta.data['cell'] <- rownames(tiss@meta.data)
-```
 
-```{r}
 #anno = read_csv(here("00_data_ingest", "18_global_annotation_csv", "annotations_FACS.csv"))
-anno = read_csv(here("00_data_ingest", "18_global_annotation_csv", "annotations_facs.csv"))
+anno = read_csv("/home/agranado/MEGA/Caltech/rnaseq/tabula-muris/00_data_ingest/18_global_annotation_csv/annotations_facs.csv")
 anno %>% group_by(tissue, cell_ontology_class) %>% summarize(count = n())
-```
 
-```{r}
-tissue_colors = read_csv(here("00_data_ingest", "15_color_palette","tissue_colors.csv"))
+tissue_colors = read_csv("/home/agranado/MEGA/Caltech/rnaseq/tabula-muris/00_data_ingest/15_color_palette/tissue_colors.csv")
 colnames(tissue_colors) = c("tissue", "color")
-```
-
-
-```{r}
+#update metadata
 tiss@meta.data <- tiss@meta.data %>%
 		   left_join(anno %>% select(cell_ontology_class,cell_ontology_id,free_annotation, cell), by = 'cell') %>%
 		   left_join(tissue_colors, by = 'tissue')
 
 rownames(tiss@meta.data) <- tiss@meta.data$cell
-```
 
-```{r}
+
+
+
+
+#Here we can analyze the composition of each cluster:
+
+
+tiss@meta.data %>% select(cluster,cell_ontology_class,tissue) -> clusters.info
+
+#we count how many cells are on each cluster
+cluster.sizes <- clusters.info %>% group_by(cluster) %>% summarize(count = n())
+#barplot with the size of each cluster:
+p = ggplot(data = cluster.size,aes(x=cluster,y=count)) + geom_bar(stat="identity")
+p
+
+
+
+
+
 tiss_FACS = tiss
 save(tiss_FACS, file=here("00_data_ingest", "11_global_robj", "FACS_all.Robj"))
 ```
