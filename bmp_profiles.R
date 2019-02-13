@@ -326,16 +326,17 @@ plot.dot.expression <-function(data.to.plot,genes.plot){
 
 #plot heatmap using pheatmap
 # kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
-plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10){
+plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10,cex.font = 1){
     scale.which = "none"
+
     p1=pheatmap(dat.matrix,
              show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-             cex=1.3, clustering_distance_rows="euclidean", cex=1,
+             cex=cex.font, clustering_distance_rows="euclidean", cex=1,
              clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=kmeans_k)
 
     p2=pheatmap(dat.matrix,
             show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-            cex=1.3, clustering_distance_rows="euclidean", cex=1,
+            cex=cex.font, clustering_distance_rows="euclidean", cex=1,
             clustering_distance_cols="euclidean", clustering_method="complete")
 
     x11()
@@ -388,7 +389,7 @@ fancy.heatmap <-function(dat.matrix, nclusters = 15,cex.row = 2,cex.col = 3){
   #Format: cell type (tissue)
   row.names(class.combinations)<-paste(class.combinations$Type," (",class.combinations$Tissue,")",sep="")
   row.names(dat.matrix)<-paste(class.combinations$Type," (",class.combinations$Tissue,")",sep="")
-
+  scale.which = "none"
   x11();
   p2=pheatmap(dat.matrix,
              show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
@@ -396,7 +397,8 @@ fancy.heatmap <-function(dat.matrix, nclusters = 15,cex.row = 2,cex.col = 3){
              clustering_distance_cols="euclidean", clustering_method="complete",
              annotation_row = class.combinations,cutree_rows = nclusters,
              annotation_colors = annotation.colors,
-             fontsize_row = cex.row, fontsize_col = cex.col)
+             fontsize_row = cex.row, fontsize_col = cex.col,
+              annotation_legend=F)
 }
 
 make.legend <-function(annotation.colors,idx=1,text.size=18){
