@@ -1,7 +1,7 @@
----
-title: "Tabula Muris: All FACS analysis"
-output: html_notebook
----
+# ---
+# title: "Tabula Muris: All FACS analysis"
+# output: html_notebook
+# ---
 
 # Preprocessing
 
@@ -72,6 +72,7 @@ erccs <- grep(pattern = "^ERCC-", x = rownames(x = raw.data), value = TRUE)
 
 #percent is the ratio, for each cell, between the sum of ERCC detection divided by the total count
 percent.ercc <- Matrix::colSums(raw.data[erccs, ])/Matrix::colSums(raw.data)
+sum.ercc<-Matrix::colSums(raw.data[erccs, ])
 ercc.index <- grep(pattern = "^ERCC-", x = rownames(x = raw.data), value = FALSE)
 raw.data <- raw.data[-ercc.index,] #remove the ERCC sequences
 
@@ -92,6 +93,10 @@ raw.data = raw.data[,percent.ercc<0.15]
   bmp.indexes=match(bmp.all,rownames(raw.data))
 
   raw.bmp <-raw.data[bmp.indexes,]
+
+  #comment this:
+  raw.data_ = raw.data
+  raw.data = raw.bmp #to process only bmp matrix
 
 #take from meta.data only cells that remain in the matrix
 cell.meta.filter = cell.meta.data[colnames(raw.data), ]
@@ -124,44 +129,43 @@ colnames(tiss@meta.data)[colnames(tiss@meta.data) == 'nUMI'] <- 'nReads' # this 
 # #all of these percentages are for EACH cell
 # percent.Rn45s <- tiss@raw.data['Rn45s', ]/Matrix::colSums(tiss@raw.data)
 # tiss <- AddMetaData(object = tiss, metadata = percent.Rn45s, col.name = "percent.Rn45s")
-```
 
 # Analysis
 
-A sanity check: genes per cell vs reads per cell.
+#A sanity check: genes per cell vs reads per cell.
 
-```{r}
+
 GenePlot(object = tiss, gene1 = "nReads", gene2 = "nGene", use.raw=T)
 
 # # # # #Filter out cells with few reads and few genes.
 
 #filter cells that have less that 50000 reads, or that have more than 500 genes with zero reads
 tiss <- FilterCells(object = tiss, subset.names = c("nGene", "nReads"), low.thresholds = c(2, 50))
-```
+
 
 # # #Normalize the data, then center and scale.
 
-```{r}
+
 tiss <- NormalizeData(object = tiss, scale.factor = 1e6) #default normalization by Seurat
 tiss <- ScaleData(object = tiss)
 tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5)
-```
+
 
 # # # #Run Principal Component Analysis.
-```{r}
+
 tiss <- RunPCA(object = tiss, do.print = FALSE, pcs.compute = 100)
 tiss <- ProjectPCA(object = tiss, do.print = FALSE)
-```
 
-```{r, echo=FALSE, fig.height=4, fig.width=8}
+
+#```{r, echo=FALSE, fig.height=4, fig.width=8}
 PCHeatmap(object = tiss, pc.use = 1:3, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, num.genes = 8)
-```
+#```
 
-Later on (in FindClusters and TSNE) you will pick a number of principal components to use. This has the effect of keeping the major directions of variation in the data and, ideally, supressing noise. There is no correct answer to the number to use, but a decent rule of thumb is to go until the plot plateaus.
+# Later on (in FindClusters and TSNE) you will pick a number of principal components to use. This has the effect of keeping the major directions of variation in the data and, ideally, supressing noise. There is no correct answer to the number to use, but a decent rule of thumb is to go until the plot plateaus.
 
-```{r}
+
 PCElbowPlot(object = tiss, num.pc = 5)
-```
+
 
 Choose the number of principal components to use.
 ```{r}

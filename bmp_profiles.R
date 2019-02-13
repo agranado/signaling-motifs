@@ -157,7 +157,8 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
         group_by_at(c(which.var,"genes.plot")) %>% # NOTE doing it like this groups all variables might work but then you can index easily
         dplyr::summarize(
           avg.exp = mean(expm1(x = expression)), # e^x -1
-          pct.exp = PercentAbove(x = expression, threshold = 0) #any cell with expression >0
+          pct.exp = PercentAbove(x = expression, threshold = 0), #any cell with expression >0
+          avg.log.exp = mean(expression)
         ) -> data.to.plot
 
       # THIS doesnt have to change
@@ -165,7 +166,7 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
       data.to.plot %>%
         ungroup() %>%
         group_by(genes.plot) %>%
-        mutate(avg.exp.scale = scale(x = avg.exp)) %>% #scale average expression (not log)
+        mutate(avg.exp.scale = scale(x = avg.exp)) %>% #scale average expression (not log) #mutate adds a new variable to df
         mutate(avg.exp.scale = MinMax(   #make all values > abs(2.5) = 2.5
           data = avg.exp.scale,
           max = col.max,
@@ -302,8 +303,24 @@ barplot.sort.filter<-function(dat.matrix,threshold = 100){
 
     #filter and returned
     pass.genes = as.vector(df.matrix[df.matrix$sum.pct>100,]$gene.name)
+
+
     new.matrix = dat.matrix[,pass.genes]
     return(new.matrix)
+}
+
+# simple bar plot
+# for a list of genes and one attribute it will plot a sorted barplot
+simple.barplot.sort<-function(df){
+  colnames(df)<-c("x")
+  df$gene.name = row.names(df)
+  df=df[with(df,order(x)), ]
+  df$gene.name = factor(df$gene.name, levels = df$gene.name)
+  p<-ggplot(data =df, aes(x=gene.name,y = x))  +
+  geom_bar(stat = "identity")
+  p
+  p + coord_flip()
+
 }
 
 
@@ -326,17 +343,19 @@ plot.dot.expression <-function(data.to.plot,genes.plot){
 
 #plot heatmap using pheatmap
 # kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
-plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10){
+plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10,cluster.cols=T){
     scale.which = "none"
     p1=pheatmap(dat.matrix,
              show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
              cex=1.3, clustering_distance_rows="euclidean", cex=1,
-             clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=kmeans_k)
+             clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=kmeans_k,
+              cluster.cols=cluster.cols)
 
     p2=pheatmap(dat.matrix,
             show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
             cex=1.3, clustering_distance_rows="euclidean", cex=1,
-            clustering_distance_cols="euclidean", clustering_method="complete")
+            clustering_distance_cols="euclidean", clustering_method="complete",
+            cluster.cols=cluster.cols)
 
     x11()
     if(mode=="single"){
