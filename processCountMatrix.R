@@ -4,10 +4,10 @@
 # ---
 
 # Preprocessing
-
-Load the requisite packages and some additional helper functions.
-
-```{r}
+#
+# Load the requisite packages and some additional helper functions.
+#
+# ```{r}
 library(Seurat)
 library(dplyr)
 library(Matrix)
@@ -15,6 +15,40 @@ library(stringr)
 library(readr)
 library(here)
 
+
+#get the annotated genes (manually curated lists)
+pathway.genes<-function(pathway ="bmp"){
+  bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
+  bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7",
+              "Bmp8a","Gdf3","Gdf9","Gdf10","Gdf11","Gdf15")
+  bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
+
+  notch.all<-c(
+  "Dll1",
+  "Dll3",
+  "Dll4",
+  "Dtx1",
+  "Jag1",
+  "Jag2",
+  "Adam10",
+  "Psen1",
+  "Psen2",
+  "Psenen",
+  "Notch1",
+  "Notch2",
+  "Notch3",
+  "Notch4")
+
+
+    if(pathway =="bmp"){
+      genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
+    }else if(pathway=="notch"){
+      genes.plot = notch.all
+    }
+
+    return (genes.plot)
+}
+#optional:
 
 tabula.path ="/home/agranado/MEGA/Caltech/rnaseq/tabula-muris/"
 
@@ -78,25 +112,35 @@ raw.data <- raw.data[-ercc.index,] #remove the ERCC sequences
 
 x11();hist(percent.ercc)
  # # # FILTER
-raw.data = raw.data[,percent.ercc<0.15]
+raw.data = raw.data[,percent.ercc<0.15] #Here is were the distribution seems to change
 #filter on ERCC % which is a measure of RNA content. High ERCC means most of the sample comes from spike-in sequences
 
 # # # # #HERE WE DO BMP-specific analysis
+# lets filter manually before selecting bmp genes:
+# FILTER CELLS
+high.count.cells = Matrix::colSums(raw.data)>50000 #recommendation for quality control (Sisi)
+raw.data  = raw.data[,high.count.cells]
 
-  # # # #Filter the bmp genes
-  bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
-  bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7","Bmp10","Bmp15",
-              "Bmp8a","Gdf2","Gdf1","Gdf3","Gdf5","Gdf6","Gdf7","Gdf9","Gdf10","Gdf11","Gdf15")
-  bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
+raw.logical = raw.data>0
+genes.at.least.one = Matrix::colSums(raw.logical)
+raw.data= raw.data[,genes.at.least.one>=3] #ten percent of genes in the pathway (31 genes)
 
-  bmp.all = c(bmp.receptors,bmp.ligands,bmp.smads)
+
+  bmp.all = pathway.genes(pathway = "bmp")
   bmp.indexes=match(bmp.all,rownames(raw.data))
 
   raw.bmp <-raw.data[bmp.indexes,]
+  counts.cells = Matrix::colSums(raw.data)
+  raw.data = raw.data[,counts.cells>length(bmp.all)*2] #keep cells that have at least this N of counts
 
   #comment this:
   raw.data_ = raw.data
   raw.data = raw.bmp #to process only bmp matrix
+
+
+  #explore the raw.data  :
+  #would be good to filter based on CV but we can't do that yet...TO DO
+  cv.bmp <-apply(raw.data,1,sd)/apply(raw.data,1,mean)
 
 #take from meta.data only cells that remain in the matrix
 cell.meta.filter = cell.meta.data[colnames(raw.data), ]
@@ -141,19 +185,17 @@ GenePlot(object = tiss, gene1 = "nReads", gene2 = "nGene", use.raw=T)
 
 #filter cells that have less that 50000 reads, or that have more than 500 genes with zero reads
 tiss <- FilterCells(object = tiss, subset.names = c("nGene", "nReads"), low.thresholds = c(2, 50))
-
-
 # # #Normalize the data, then center and scale.
-
 
 tiss <- NormalizeData(object = tiss, scale.factor = 1e6) #default normalization by Seurat
 tiss <- ScaleData(object = tiss)
 tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5)
-
+#for BMP we see 11 variable genes
 
 # # # #Run Principal Component Analysis.
-
-tiss <- RunPCA(object = tiss, do.print = FALSE, pcs.compute = 100)
+#The RunPCA() function performs the PCA on genes in the @var.genes slot
+#by default and this can be changed using the pc.genes parameter.
+tiss <- RunPCA(object = tiss, do.print = FALSE, pcs.compute = 10)
 tiss <- ProjectPCA(object = tiss, do.print = FALSE)
 
 
@@ -164,74 +206,95 @@ PCHeatmap(object = tiss, pc.use = 1:3, cells.use = 500, do.balanced = TRUE, labe
 # Later on (in FindClusters and TSNE) you will pick a number of principal components to use. This has the effect of keeping the major directions of variation in the data and, ideally, supressing noise. There is no correct answer to the number to use, but a decent rule of thumb is to go until the plot plateaus.
 
 
-PCElbowPlot(object = tiss, num.pc = 5)
+PCElbowPlot(object = tiss, num.pc = 10)
 
-
-Choose the number of principal components to use.
-```{r}
+#
+# Choose the number of principal components to use.
+# ```{r}
 # Set number of principal components.
-n.pcs = 5
-```
-
-The clustering is performed based on a nearest neighbors graph. Cells that have similar expression will be joined together. The Louvain algorithm looks for groups of cells with high modularity--more connections within the group than between groups. The resolution parameter determines the scale...higher resolution will give more clusters, lower resolution will give fewer.
-
-For the top-level clustering, aim to under-cluster instead of over-cluster. It will be easy to subset groups and further analyze them below.
-
-```{r}
+n.pcs = 8
+# ```
+#
+# The clustering is performed based on a nearest neighbors graph.
+#Cells that have similar expression will be joined together.
+#The Louvain algorithm looks for groups of cells with high modularity--more connections within the group than between groups.
+#The resolution parameter determines the scale...higher resolution will give more clusters, lower resolution will give fewer.
+#
+# For the top-level clustering, aim to under-cluster instead of over-cluster. It will be easy to subset groups and further analyze them below.
+#
+# ```{r}
 # Set resolution
-res.used <- 1
+#more resolution means more clusters:
+#Seurat recommends between 0.6 and 1.2
+#Tabula Muris papers uses 1 for 40k cells
+res.used <- 0.6
 
 tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
-    resolution = res.used, print.output = 0, save.SNN = TRUE) #DONE
-```
+    resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T) #DONE
 
-To visualize
-```{r}
-# If cells are too spread out, you can raise the perplexity. If you have few cells, try a lower perplexity (but never less than 10).
-tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=30)
-```
 
-```{r}
+# ```
+#
+# To visualize
+# ```{r}
+# If cells are too spread out, you can raise the perplexity.
+#If you have few cells, try a lower perplexity (but never less than 10).
+# https://distill.pub/2016/misread-tsne/
+tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=50,
+                check_duplicates = F)
+# set check_duplicates = F when testing small number of genes since some cells might have identical profiles
+
+# ```
+#
+# ```{r}
 TSNEPlot(tiss, group.by = 'tissue')
-```
-
-```{r}
+# ```
+#
+# ```{r}
 save(tiss, file=here("00_data_ingest", "11_global_robj", "FACS_all_preannotation.Robj"))
 #load(here("00_data_ingest", "11_global_robj", "FACS_all_preannotation.Robj"))
 ```
 
 # Add in metadata, annotations, and save.
 
-```{r}
-
 # plot the location of a list of genes in the main tSNE plot
 x11();FeaturePlot(tiss,bmp.ligands, cols.use = c("lightgrey","blue"),nCol=4  )
 
 tiss@meta.data['cluster'] <- tiss@ident
 tiss@meta.data['cell'] <- rownames(tiss@meta.data)
-```
 
-```{r}
 #anno = read_csv(here("00_data_ingest", "18_global_annotation_csv", "annotations_FACS.csv"))
-anno = read_csv(here("00_data_ingest", "18_global_annotation_csv", "annotations_facs.csv"))
+anno = read_csv("/home/agranado/MEGA/Caltech/rnaseq/tabula-muris/00_data_ingest/18_global_annotation_csv/annotations_facs.csv")
 anno %>% group_by(tissue, cell_ontology_class) %>% summarize(count = n())
-```
 
-```{r}
-tissue_colors = read_csv(here("00_data_ingest", "15_color_palette","tissue_colors.csv"))
+tissue_colors = read_csv("/home/agranado/MEGA/Caltech/rnaseq/tabula-muris/00_data_ingest/15_color_palette/tissue_colors.csv")
 colnames(tissue_colors) = c("tissue", "color")
-```
-
-
-```{r}
+#update metadata
 tiss@meta.data <- tiss@meta.data %>%
 		   left_join(anno %>% select(cell_ontology_class,cell_ontology_id,free_annotation, cell), by = 'cell') %>%
 		   left_join(tissue_colors, by = 'tissue')
 
 rownames(tiss@meta.data) <- tiss@meta.data$cell
-```
 
-```{r}
+
+
+
+
+#Here we can analyze the composition of each cluster:
+
+
+tiss@meta.data %>% select(cluster,cell_ontology_class,tissue) -> clusters.info
+
+#we count how many cells are on each cluster
+cluster.sizes <- clusters.info %>% group_by(cluster) %>% summarize(count = n())
+#barplot with the size of each cluster:
+p = ggplot(data = cluster.size,aes(x=cluster,y=count)) + geom_bar(stat="identity")
+p
+
+
+
+
+
 tiss_FACS = tiss
 save(tiss_FACS, file=here("00_data_ingest", "11_global_robj", "FACS_all.Robj"))
 ```
