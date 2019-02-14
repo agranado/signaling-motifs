@@ -317,6 +317,16 @@ p = ggplot(data = cluster.size,aes(x=cluster,y=count)) + geom_bar(stat="identity
 p
 
 
+
+#---- Let's plot with the names of the overrepresented cell types
+FetchData(tiss,c('tSNE_1','tSNE_2')) %>%
+  summarize(xmin=min(tSNE_1),xmax=max(tSNE_1),ymin=min(tSNE_2),ymax=max(tSNE_2) )
+
+  plot_min = min(lims$xmin, lims$ymin)
+  plot_max = max(lims$xmax, lims$ymax)
+
+
+
 tiss_FACS = tiss
 save(tiss_FACS, file=here("00_data_ingest", "11_global_robj", "FACS_all.Robj"))
 ```
