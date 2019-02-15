@@ -121,21 +121,21 @@ raw.data = raw.data[,percent.ercc<0.15] #Here is were the distribution seems to 
 high.count.cells = Matrix::colSums(raw.data)>50000 #recommendation for quality control (Sisi)
 raw.data  = raw.data[,high.count.cells]
 
-raw.logical = raw.data>0
-genes.at.least.one = Matrix::colSums(raw.logical)
-raw.data= raw.data[,genes.at.least.one>=3] #ten percent of genes in the pathway (31 genes)
 
 
   bmp.all = pathway.genes(pathway = "bmp")
   bmp.indexes=match(bmp.all,rownames(raw.data))
 
-  raw.bmp <-raw.data[bmp.indexes,]
+  raw.data <-raw.data[bmp.indexes,]
+
+
   counts.cells = Matrix::colSums(raw.data)
   raw.data = raw.data[,counts.cells>length(bmp.all)*2] #keep cells that have at least this N of counts
 
-  #comment this:
-  raw.data_ = raw.data
-  raw.data = raw.bmp #to process only bmp matrix
+
+  raw.logical = raw.data>0
+  genes.at.least.one = Matrix::colSums(raw.logical)
+  raw.data= raw.data[,genes.at.least.one>=3] #ten percent of genes in the pathway (31 genes)
 
 
   #explore the raw.data  :
@@ -144,8 +144,12 @@ raw.data= raw.data[,genes.at.least.one>=3] #ten percent of genes in the pathway 
 
 #take from meta.data only cells that remain in the matrix
 cell.meta.filter = cell.meta.data[colnames(raw.data), ]
-# Create the Seurat object with all the data
 
+
+#last step: filter duplicated cells (with exact same count profiles)
+duplicated.cells = duplicated(t(as.matrix(raw.data)))
+raw.data=raw.data[,!duplicated.cells]
+#-------------------------------------------------------------------------------
 
 # # # # ## SEURAT OBJECT
 tiss <- CreateSeuratObject(raw.data = raw.data)
@@ -189,7 +193,7 @@ tiss <- FilterCells(object = tiss, subset.names = c("nGene", "nReads"), low.thre
 
 tiss <- NormalizeData(object = tiss, scale.factor = 1e6) #default normalization by Seurat
 tiss <- ScaleData(object = tiss)
-tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5)
+tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5,num.bin =10)
 #for BMP we see 11 variable genes
 
 # # # #Run Principal Component Analysis.
@@ -212,7 +216,7 @@ PCElbowPlot(object = tiss, num.pc = 10)
 # Choose the number of principal components to use.
 # ```{r}
 # Set number of principal components.
-n.pcs = 8
+n.pcs = 10
 # ```
 #
 # The clustering is performed based on a nearest neighbors graph.
@@ -240,7 +244,7 @@ tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
 # If cells are too spread out, you can raise the perplexity.
 #If you have few cells, try a lower perplexity (but never less than 10).
 # https://distill.pub/2016/misread-tsne/
-tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=50,
+tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=100,
                 check_duplicates = F)
 # set check_duplicates = F when testing small number of genes since some cells might have identical profiles
 
@@ -267,9 +271,24 @@ tiss@meta.data['cell'] <- rownames(tiss@meta.data)
 anno = read_csv("/home/agranado/MEGA/Caltech/rnaseq/tabula-muris/00_data_ingest/18_global_annotation_csv/annotations_facs.csv")
 anno %>% group_by(tissue, cell_ontology_class) %>% summarize(count = n())
 
+# # A tibble: 120 x 3
+# # Groups:   tissue [?]
+#    tissue            cell_ontology_class                  count
+#    <chr>             <chr>                                <int>
+#  1 Aorta             endothelial cell                       188
+#  2 Aorta             erythrocyte                             91
+#  3 Aorta             fibroblast                              70
+#  4 Aorta             professional antigen presenting cell    59
+#  5 Bladder           bladder cell                           695
+#  6 Bladder           bladder urothelial cell                683
+#  7 Brain_Myeloid     macrophage                              61
+
 tissue_colors = read_csv("/home/agranado/MEGA/Caltech/rnaseq/tabula-muris/00_data_ingest/15_color_palette/tissue_colors.csv")
 colnames(tissue_colors) = c("tissue", "color")
 #update metadata
+# left_join()
+# return all rows from x, and all columns from x and y. Rows in x with no match in y will have NA values in the new columns.
+# If there are multiple matches between x and y, all combinations of the matches are returned.
 tiss@meta.data <- tiss@meta.data %>%
 		   left_join(anno %>% select(cell_ontology_class,cell_ontology_id,free_annotation, cell), by = 'cell') %>%
 		   left_join(tissue_colors, by = 'tissue')
