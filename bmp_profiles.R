@@ -156,7 +156,7 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
       data.to.plot %>% #group_by_at uses strings as arguments for indexing the data frame
         group_by_at(c(which.var,"genes.plot")) %>% # NOTE doing it like this groups all variables might work but then you can index easily
         dplyr::summarize(
-          avg.exp = mean(expm1(x = expression)), # e^x -1
+          avg.exp = mean(x = expression), # e^x -1
           pct.exp = PercentAbove(x = expression, threshold = 0), #any cell with expression >0
           avg.log.exp = mean(expression)
         ) -> data.to.plot
@@ -480,17 +480,47 @@ pca.bi.plot<-function(pathway = "notch", which.var = "ontology",quant.var = "pct
 # ------------------- Analaysis of clusters:
 
 
-barplot.cluster.profile<-function(bmp.data,which.cluster,pathway = "bmp"){
+barplot.cluster.profile<-function(bmp.data,which.cluster,pathway = "bmp",save=F,plots.path ="./plots/bmp_PCA_allCells/"){
 
   bmp.data[bmp.data$id==which.cluster,] %>% select(pathway.genes(pathway)) -> gene.expr.cluster
+  cluster.size = dim(gene.expr.cluster)[1]
   this.cluster = as.data.frame( colSums(gene.expr.cluster)/dim(bmp.data)[1] )
   colnames(this.cluster)<-c("x")
   this.cluster$gene.name = row.names(this.cluster)
   this.cluster$gene.name =factor( this.cluster$gene.name, levels = pathway.genes("bmp"))
   p<-ggplot(data = this.cluster,aes(x = gene.name,y = x)) +
         geom_bar(stat = "identity") +
-        theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+        theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
+        ggtitle(paste("Cluster ",toString(which.cluster) , "(",toString(cluster.size),"cells)")) +
+        xlab("Gene") + ylab("Mean Expr Norm")
         p
+  ggsave(paste(plots.path,"barplotProfile_Cluster_",toString(which.cluster),".pdf",sep=""),width=8,height=3)
+}
+
+save.multiple.barplots<-function(bmp.data,which.clusters,plots.path){
+
+  lapply(which.clusters,barplot.cluster.profile,bmp.data= bmp.data,pathway="bmp",save=T,plots.path = plots.path)
+
+
+}
+#then do
+#  pdfunite * outputfile.pdf
+#  rm barplotProfile_Cluster_*
+
+save.tSNE.pdf<-function(tiss,gene.list){
+
+}
+
+heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale"){
+  data.to.plot<-fetch.data(tiss,pathway.genes(which.path))
+  data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep=",",remove=F) -> data.to.plot
+  which.var=which.var
+  quant.var = quant.var
+  genes.plot = pathway.genes(pathway)
+  print("Creating tidy data frame.../n")
+  data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
+  dat.matrix = cluster.variable(data.to.plot,quant.var)
+  plot.pheatmap(dat.matrix,mode="single",cluster.cols =T)
 }
 
 
