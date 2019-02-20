@@ -156,7 +156,7 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
       data.to.plot %>% #group_by_at uses strings as arguments for indexing the data frame
         group_by_at(c(which.var,"genes.plot")) %>% # NOTE doing it like this groups all variables might work but then you can index easily
         dplyr::summarize(
-          avg.exp = mean(x = expression), # e^x -1
+          avg.exp = mean(expm1(x = expression)), # e^x -1)
           pct.exp = PercentAbove(x = expression, threshold = 0), #any cell with expression >0
           avg.log.exp = mean(expression)
         ) -> data.to.plot
@@ -343,20 +343,31 @@ plot.dot.expression <-function(data.to.plot,genes.plot){
 
 #plot heatmap using pheatmap
 # kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
-plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10,cluster.cols=T){
-    scale.which = "none"
+plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10,cluster.cols=T,scale.which="none",
+                        filename="",cellwidth=7.5,fontsize=8,cellheight=7.5,width=10,height=12){
+    #scale.which = "none"
 
     p1=pheatmap(dat.matrix,
              show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
              cex=1.3, clustering_distance_rows="euclidean", cex=1,
              clustering_distance_cols="euclidean", clustering_method="complete",kmeans_k=kmeans_k,
               cluster.cols=cluster.cols)
+    if(filename==""){ #save heatmap as pdf
+            p2=pheatmap(dat.matrix,
+                    show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+                    cex=1.3, clustering_distance_rows="euclidean", cex=1,
+                    clustering_distance_cols="euclidean", clustering_method="complete",
+                    cluster.cols=cluster.cols)
+    }else {
+            p2=pheatmap(dat.matrix,
+                    show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
+                    cex=1.3, clustering_distance_rows="euclidean", cex=1,
+                    clustering_distance_cols="euclidean", clustering_method="complete",
+                    cluster.cols=cluster.cols,filename=filename,cellwidth=cellwidth,cellheight=cellheight,fontsize=fontsize,
+                    width=width,height=height)
+          }
 
-    p2=pheatmap(dat.matrix,
-            show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
-            cex=1.3, clustering_distance_rows="euclidean", cex=1,
-            clustering_distance_cols="euclidean", clustering_method="complete",
-            cluster.cols=cluster.cols)
+
 
     x11()
     if(mode=="single"){
@@ -511,18 +522,50 @@ save.tSNE.pdf<-function(tiss,gene.list){
 
 }
 
-heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale"){
+heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale",scale.which ="none",filename="",
+                  cellwidth=7.5,cellheight=7.5,fontsize=8,width=10,height=15,filter.type=0){
   data.to.plot<-fetch.data(tiss,pathway.genes(which.path))
   data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep=",",remove=F) -> data.to.plot
+
+  #if ontology, filter cell types with less than 50 cells before creating heatmap :[
+
+  if(which.var =="ontology" & filter.type>0){
+    data.to.plot %>% group_by(ontology) %>% dplyr::summarise(n=n()) -> n.cells
+    a<-n.cells$n
+    n.cells$ontology[is.na(n.cells$ontology)] = "NA"
+    names(a)<-n.cells$ontology
+    aa<-as.data.frame(a)
+    filter.celltypes = rownames(aa)[aa>filter.type]
+  }
+
+
   which.var=which.var
   quant.var = quant.var
   genes.plot = pathway.genes(pathway)
   print("Creating tidy data frame.../n")
   data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
   dat.matrix = cluster.variable(data.to.plot,quant.var)
-  plot.pheatmap(dat.matrix,mode="single",cluster.cols =T)
+
+  if(which.var =="ontology" & filter.type>0){
+      dat.matrix = dat.matrix[filter.celltypes,]
+  }
+
+  if(filename=="")
+    plot.pheatmap(dat.matrix,mode="single",cluster.cols =T,scale.which=scale.which)
+  else
+    plot.pheatmap(dat.matrix,mode="single",cluster.cols =T,scale.which=scale.which,
+        filename =filename,cellwidth=cellwidth,cellheight=cellheight,fontsize=fontsize,width=width,height=height)
+
 }
 
+#filter data.matrix for cell types with low number of cells
+
+# data.to.plot %>% group_by(ontology) %>% dplyr::summarize(n=n()) -> a
+#names(aa)<-a$ontology
+#a$ontology[is.na(a$ontology)]<-"NA"
+#row.names(aa)<-a$ontology
+#as.data.frame(aa)
+filter.celltypes =row.names(aa)[which(aa>log10(50))]
 
 distinct.colors = c("#5cc69a",
 "#c05ac5",
