@@ -1,5 +1,6 @@
 
-
+library(Matrix)
+library(Seurat)
 #data from intestine single cell rna seq
 test <-read.table("table_B_scRNAseq_UMI_counts.tsv",sep="\t",header=T)
 #gene names are in 1st column
@@ -10,6 +11,21 @@ raw.data<-Matrix(as.matrix(test2),sparse =T)
 
 #plot the histogram of reads across cells:
 hist(log10(Matrix::colSums(raw.data)))
+
+
+raw.data<-raw.data[keep_feature,]
+
+#remove mitocondrial genes
+#in this dataset, cells with high mitochondrial content (>50%) have been already removed
+# this matrix is basically already being filtered and QC'd
+
+mit <- grep(pattern = "^mt-", x = rownames(x = raw.data), value = TRUE)
+
+#percent is the ratio, for each cell, between the sum of ERCC detection divided by the total count
+percent.mit <- Matrix::colSums(raw.data[mit, ])/Matrix::colSums(raw.data)
+sum.mit<-Matrix::colSums(raw.data[mit, ])
+mit.index <- grep(pattern = "^mt-", x = rownames(x = raw.data), value = FALSE)
+raw.data <- raw.data[-mit.index,] #remove the ERCC sequences
 
 
 bmp.all = pathway.genes(pathway = "bmp")

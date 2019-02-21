@@ -9,12 +9,12 @@ Download the three supplementary files (barcodes, matrix and genes) from [GSM264
 Import the downloaded 10x cellranger output files to Seurat:
 
 ``` r
-csc1.data <- Read10X(data.dir = "./raw_data/GSM2644349_Lgr5eGFP_neg_1")
+csc1.data <- Read10X(data.dir = "raw_data/moor/GSM2644349_Lgr5eGFP_neg_1/")
 csc1 <- CreateSeuratObject(raw.data = csc1.data,
                            project = "csc1")
 
 
-csc2.data <- Read10X(data.dir = "./raw_data/GSM2644350_Lgr5eGFP_neg_2")
+csc2.data <- Read10X(data.dir = "./raw_data/moor/GSM2644350_Lgr5eGFP_neg_2")
 csc2 <- CreateSeuratObject(raw.data = csc2.data,  project = "csc2")
 
 csc.combined <- MergeSeurat(object1 = csc1, object2 = csc2, project = "csc")
@@ -137,6 +137,16 @@ save resuling Seurat file:
 ``` r
 save(csc.combined, file = "./raw_data/csc.combined_seurat.Rda")
 sessionInfo()
+
+
+####
+#Alejandro: analyse the bmp genes expression
+bmp.all = pathway.genes("bmp")
+all.genes = row.names(csc.combined@data)
+bmp.indexes<-match(bmp.all,all.genes)
+
+genes.expressed<-bmp.all[rowSums(csc.combined@data[bmp.indexes,])>0]
+
 ```
 
     ## R version 3.5.0 (2018-04-23)
