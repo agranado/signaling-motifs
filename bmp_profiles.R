@@ -495,7 +495,7 @@ barplot.cluster.profile<-function(bmp.data,which.cluster,pathway = "bmp",save=F,
 
   bmp.data[bmp.data$id==which.cluster,] %>% select(pathway.genes(pathway)) -> gene.expr.cluster
   cluster.size = dim(gene.expr.cluster)[1]
-  this.cluster = as.data.frame( colSums(gene.expr.cluster)/dim(bmp.data)[1] )
+  this.cluster = as.data.frame( colSums(gene.expr.cluster)/cluster.size )
   colnames(this.cluster)<-c("x")
   this.cluster$gene.name = row.names(this.cluster)
   this.cluster$gene.name =factor( this.cluster$gene.name, levels = pathway.genes("bmp"))
@@ -503,7 +503,7 @@ barplot.cluster.profile<-function(bmp.data,which.cluster,pathway = "bmp",save=F,
         geom_bar(stat = "identity") +
         theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
         ggtitle(paste("Cluster ",toString(which.cluster) , "(",toString(cluster.size),"cells)")) +
-        xlab("Gene") + ylab("Mean Expr Norm")
+        xlab("Gene") + ylab("Mean Expr Norm") + ylim(0,15)
         p
   ggsave(paste(plots.path,"barplotProfile_Cluster_",toString(which.cluster),".pdf",sep=""),width=8,height=3)
 }
@@ -541,7 +541,7 @@ heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "a
 
   which.var=which.var
   quant.var = quant.var
-  genes.plot = pathway.genes(pathway)
+  genes.plot = pathway.genes(which.path)
   print("Creating tidy data frame.../n")
   data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
   dat.matrix = cluster.variable(data.to.plot,quant.var)
@@ -565,7 +565,7 @@ heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "a
 #a$ontology[is.na(a$ontology)]<-"NA"
 #row.names(aa)<-a$ontology
 #as.data.frame(aa)
-filter.celltypes =row.names(aa)[which(aa>log10(50))]
+#filter.celltypes =row.names(aa)[which(aa>log10(50))]
 
 distinct.colors = c("#5cc69a",
 "#c05ac5",
