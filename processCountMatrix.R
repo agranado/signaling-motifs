@@ -315,10 +315,25 @@ tiss@meta.data %>% select(cluster,cell_ontology_class,tissue) -> clusters.info
 #Lots of NA values in the cell_ontology_class : make it a string
  clusters.info$cell_ontology_class[is.na(clusters.info$cell_ontology_class)]<-"NA"
 
+
+ #---- Order with respect to the count column
+ cluster.size<-clusters.info %>% group_by(cell_ontology_class) %>% summarise(count=n())
+ cluster.size = cluster.size[order(cluster.size$count,decreasing=F),]
+ cluster.size$cell_ontology_class<-factor(cluster.size$cell_ontology_class,levels=cluster.size$cell_ontology_class)
+ #barplot with the size of each cluster:
+ p = ggplot(data = cluster.size,aes(x=cell_ontology_class,y=log10(count))) + geom_bar(stat="identity")
+ x11();p + coord_flip()
+#some cell types are represented by <100 cell, we can remove those
+
+ cluster.size$freq <-cluster.size$count/sum(cluster.size$count)
+ cluster.size = cluster.size[order(cluster.size$freq,decreasing=T),]
+
+
 #-----we count how many cells are on each cluster and the relative frequency per cluster:
 clusters.info %>% group_by(cluster,cell_ontology_class) %>% #Count how many cells have same cluster AND ontology
     summarise(count =n()) %>% group_by(cluster) %>% #summarise ungroups the data, so we group it again
         mutate(freq = count / sum(count)) -> clusters.count
+
 
       #   cluster cell_ontology_class     count    freq
       #   <fct>   <chr>                   <int>   <dbl>
@@ -326,14 +341,47 @@ clusters.info %>% group_by(cluster,cell_ontology_class) %>% #Count how many cell
       # 2 0       B cell                     74 0.0268
       # 3 0       basal cell                219 0.0793
       # ....
+
+
+#-----let's look at a particular cluster
+      #What fraction of the cluster is a given cell type?
+      clus.number = 10
+      clus28<-clusters.count[clusters.count$cluster==clus.number,]
+      clus28<-clus28[order(clus28$freq,decreasing=T),]
+      clus28
+    #   cluster cell_ontology_class              count   freq
+    #   <fct>   <chr>                            <int>  <dbl>
+    # 1 28      microglial cell                     62 0.223
+    # 2 28      fibroblast                          49 0.176
+    # 3 28      endothelial cell                    32 0.115
+    # 4 28      mesenchymal cell                    19 0.0683
+    # 5 28      mesenchymal stem cell of adipose    18 0.0647
+    # 6 28      leukocyte                           12 0.0432
+    # 7 28      stromal cell                        11 0.0396
+    # 8 28      bladder cell                        10 0.0360
+
+#-----A similar question: What fraction of a given cell type is in a particular cluster?
+clusters.info %>% group_by(cluster,cell_ontology_class) %>% #Count how many cells have same cluster AND ontology
+    summarise(count =n()) %>% group_by(cell_ontology_class) %>% #summarise ungroups the data, so we group it again
+        mutate(freq = count / sum(count)) -> ontology.count
+
+#--- Order by frequency
+ cell.type = "microglial cell"
+ astro.count = ontology.count[ontology.count$cell_ontology_class==cell.type,]
+ astro.count=astro.count[order(astro.count$freq,decreasing=T),]
+ astro.count$cluster<-factor(astro.count$cluster,levels=astro.count$cluster) #for gplot to respect the order
+ head(astro.count)
+ #
+ # 1 21      astrocyte             141 0.675
+ # 2 2       astrocyte              12 0.0574
+ # 3 0       astrocyte               8 0.0383
+ # 4 1       astrocyte               7 0.0335
+ # 5 23      astrocyte               7 0.0335
+ # 6 6       astrocyte               6 0.0287
+
 #---- Look at how a given cell type is distributed across clusters:
  clusters.count[clusters.count$cell_ontology_class=="astrocyte",]
 
-#---- Order with respect to the count column
-
-#barplot with the size of each cluster:
-p = ggplot(data = cluster.size,aes(x=cluster,y=count)) + geom_bar(stat="identity")
-p
 
 
 
