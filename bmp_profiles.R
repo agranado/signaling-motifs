@@ -521,7 +521,7 @@ save.multiple.barplots<-function(bmp.data,which.clusters,plots.path){
 save.tSNE.pdf<-function(tiss,gene.list){
 
 }
-
+#quant vars: avg.exp pct.exp avg.log.exp avg.exp.scale
 heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale",scale.which ="none",filename="",
                   cellwidth=7.5,cellheight=7.5,fontsize=8,width=10,height=15,filter.type=0){
   data.to.plot<-fetch.data(tiss,pathway.genes(which.path))
