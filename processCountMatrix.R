@@ -242,7 +242,7 @@ PCElbowPlot(object = tiss, num.pc = 10)
 # Choose the number of principal components to use.
 # ```{r}
 # Set number of principal components.
-n.pcs = 6
+n.pcs = 7
 # ```
 #
 # The clustering is performed based on a nearest neighbors graph.
@@ -257,7 +257,7 @@ n.pcs = 6
 #more resolution means more clusters:
 #Seurat recommends between 0.6 and 1.2
 #Tabula Muris papers uses 1 for 40k cells
-res.used <- 0.6
+res.used <- 2
 
 tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
     resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T) #DONE
