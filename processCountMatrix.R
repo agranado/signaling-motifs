@@ -219,13 +219,20 @@ manual.norm = log(t( t(tiss@raw.data)/total.reads  ) * 1000000 +1)
 tiss@data<-manual.norm
 
 tiss <- ScaleData(object = tiss)
-tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5,num.bin =10)
+#this does not work for low number of low-expressed genes: see the PCA part 
+tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5,num.bin =4)
+tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.2,num.bin =3,x.low.cutoff = 0.2,mean.function=ExpMean)
+
 #for BMP we see 11 variable genes
 
 # # # #Run Principal Component Analysis.
 #The RunPCA() function performs the PCA on genes in the @var.genes slot
 #by default and this can be changed using the pc.genes parameter.
-tiss <- RunPCA(object = tiss, do.print = FALSE, pcs.compute = 10)
+tiss <- RunPCA(object = tiss, do.print = FALSE, pcs.compute = 13)
+#use all genes of the pathway, instead of only the "variable genes"
+tiss <- RunPCA(object = tiss, pc.genes =bmp.genes, do.print = FALSE, pcs.compute = 20)
+
+
 tiss <- ProjectPCA(object = tiss, do.print = FALSE)
 
 
@@ -236,13 +243,13 @@ PCHeatmap(object = tiss, pc.use = 1:3, cells.use = 500, do.balanced = TRUE, labe
 # Later on (in FindClusters and TSNE) you will pick a number of principal components to use. This has the effect of keeping the major directions of variation in the data and, ideally, supressing noise. There is no correct answer to the number to use, but a decent rule of thumb is to go until the plot plateaus.
 
 
-PCElbowPlot(object = tiss, num.pc = 10)
+PCElbowPlot(object = tiss, num.pc = 20)
 
 #
 # Choose the number of principal components to use.
 # ```{r}
 # Set number of principal components.
-n.pcs = 7
+n.pcs = 18
 # ```
 #
 # The clustering is performed based on a nearest neighbors graph.
@@ -257,7 +264,7 @@ n.pcs = 7
 #more resolution means more clusters:
 #Seurat recommends between 0.6 and 1.2
 #Tabula Muris papers uses 1 for 40k cells
-res.used <- 2
+res.used <- 1.2
 
 tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
     resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T) #DONE
@@ -270,7 +277,7 @@ tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
 # If cells are too spread out, you can raise the perplexity.
 #If you have few cells, try a lower perplexity (but never less than 10).
 # https://distill.pub/2016/misread-tsne/
-tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=100,
+tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=30,
                 check_duplicates = F)
 # set check_duplicates = F when testing small number of genes since some cells might have identical profiles
 
