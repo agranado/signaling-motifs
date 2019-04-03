@@ -189,9 +189,12 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
 
 #takes the tidy data frame, converts the key-values to matrix and performs clustering
 cluster.variable<-function(data.to.plot,variable="pct.exp"){
-    names(data.to.plot)[1]<-"id"
+
+    if(names(data.to.plot)[1]!= "id"){
+        names(data.to.plot)[1]<-"id"
     #some cells don't have ontology class assigned and they show NA, so we make it string
-    data.to.plot$id[is.na(data.to.plot$id)] = "NA"
+        data.to.plot$id[is.na(data.to.plot$id)] = "NA"
+      }
 
     all.clusters.id = unique(data.to.plot$id) # # # # NOTE HERE the index is the one you used for retrieving the data, so be careful
     dat.matrix = matrix(0,length(all.clusters.id),length( levels(data.to.plot$genes.plot)  ))
@@ -343,9 +346,12 @@ plot.dot.expression <-function(data.to.plot,genes.plot){
 
 #plot heatmap using pheatmap
 # kmean_k groups rows to make the heatmap smaller, it does plots (i think) the average levels for the group
-plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=10,cluster.cols=T,scale.which="none",
+plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=5,cluster.cols=T,scale.which="none",
                         filename="",cellwidth=7.5,fontsize=8,cellheight=7.5,width=10,height=12){
     #scale.which = "none"
+
+    if(kmeans_k>=dim(dat.matrix)[1])
+      kmeans_k = round(dim(dat.matrix)[1]/2)
 
     p1=pheatmap(dat.matrix,
              show_rownames=T, cluster_cols=T, cluster_rows=T, scale=scale.which,
@@ -521,7 +527,7 @@ save.multiple.barplots<-function(bmp.data,which.clusters,plots.path){
 save.tSNE.pdf<-function(tiss,gene.list){
 
 }
-
+#quant vars: avg.exp pct.exp avg.log.exp avg.exp.scale
 heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale",scale.which ="none",filename="",
                   cellwidth=7.5,cellheight=7.5,fontsize=8,width=10,height=15,filter.type=0){
   data.to.plot<-fetch.data(tiss,pathway.genes(which.path))

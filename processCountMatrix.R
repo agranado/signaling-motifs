@@ -123,6 +123,14 @@ raw.data  = raw.data[,high.count.cells]
 
 
 
+
+######lets save the total count of reads,
+# Seurat normalizes the data assuming that genes in the matrix are transcriptome
+# therefore  gene_i/sum(gene)  is biased when taking only a subset of genes and we get weird things
+
+  total.reads = Matrix::colSums(raw.data)
+
+
   bmp.all = pathway.genes(pathway = "bmp")
   bmp.indexes=match(bmp.all,rownames(raw.data))
 
@@ -146,9 +154,15 @@ raw.data  = raw.data[,high.count.cells]
 cell.meta.filter = cell.meta.data[colnames(raw.data), ]
 
 
+#take the total read count only for the cells that remain
+total.reads = total.reads[colnames(raw.data)]
+
 #last step: filter duplicated cells (with exact same count profiles)
 duplicated.cells = duplicated(t(as.matrix(raw.data)))
 raw.data=raw.data[,!duplicated.cells]
+#remove the duplicate from the metadata
+cell.meta.filter=cell.meta.filter[colnames(raw.data),]
+total.reads = total.reads[colnames(raw.data)]
 #-------------------------------------------------------------------------------
 
 # # # # ## SEURAT OBJECT
@@ -156,6 +170,7 @@ tiss <- CreateSeuratObject(raw.data = raw.data)
 
 tiss <- AddMetaData(object = tiss, cell.meta.data)
 tiss <- AddMetaData(object = tiss, percent.ercc, col.name = "percent.ercc")
+tiss<- AddMetaData(object = tiss, total.reads,col.name = 'total.reads')
 # Change default name for sums of counts from nUMI to nReads
 colnames(tiss@meta.data)[colnames(tiss@meta.data) == 'nUMI'] <- 'nReads' # this is not UMI data so Seurat calculates only the number of reads
 
@@ -189,17 +204,35 @@ GenePlot(object = tiss, gene1 = "nReads", gene2 = "nGene", use.raw=T)
 
 #filter cells that have less that 50000 reads, or that have more than 500 genes with zero reads
 tiss <- FilterCells(object = tiss, subset.names = c("nGene", "nReads"), low.thresholds = c(2, 50))
-# # #Normalize the data, then center and scale.
 
+
+# # #Normalize the data, then center and scale.
+# Equivalent to
+# # # r = t(t(raw.data)/Matrix::colSums(raw.data))
+#     log(r[1:3,1:3] * 1000000 + 1)
+
+#make Seurat think we normalized using their method...
 tiss <- NormalizeData(object = tiss, scale.factor = 1e6) #default normalization by Seurat
+
+#lets try to force normalization by hand :
+manual.norm = log(t( t(tiss@raw.data)/total.reads  ) * 1000000 +1)
+tiss@data<-manual.norm
+
 tiss <- ScaleData(object = tiss)
-tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5,num.bin =10)
+#this does not work for low number of low-expressed genes: see the PCA part 
+tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5,num.bin =4)
+tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.2,num.bin =3,x.low.cutoff = 0.2,mean.function=ExpMean)
+
 #for BMP we see 11 variable genes
 
 # # # #Run Principal Component Analysis.
 #The RunPCA() function performs the PCA on genes in the @var.genes slot
 #by default and this can be changed using the pc.genes parameter.
-tiss <- RunPCA(object = tiss, do.print = FALSE, pcs.compute = 10)
+tiss <- RunPCA(object = tiss, do.print = FALSE, pcs.compute = 13)
+#use all genes of the pathway, instead of only the "variable genes"
+tiss <- RunPCA(object = tiss, pc.genes =bmp.genes, do.print = FALSE, pcs.compute = 20)
+
+
 tiss <- ProjectPCA(object = tiss, do.print = FALSE)
 
 
@@ -210,13 +243,13 @@ PCHeatmap(object = tiss, pc.use = 1:3, cells.use = 500, do.balanced = TRUE, labe
 # Later on (in FindClusters and TSNE) you will pick a number of principal components to use. This has the effect of keeping the major directions of variation in the data and, ideally, supressing noise. There is no correct answer to the number to use, but a decent rule of thumb is to go until the plot plateaus.
 
 
-PCElbowPlot(object = tiss, num.pc = 10)
+PCElbowPlot(object = tiss, num.pc = 20)
 
 #
 # Choose the number of principal components to use.
 # ```{r}
 # Set number of principal components.
-n.pcs = 10
+n.pcs = 18
 # ```
 #
 # The clustering is performed based on a nearest neighbors graph.
@@ -231,7 +264,7 @@ n.pcs = 10
 #more resolution means more clusters:
 #Seurat recommends between 0.6 and 1.2
 #Tabula Muris papers uses 1 for 40k cells
-res.used <- 0.6
+res.used <- 1.2
 
 tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
     resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T) #DONE
@@ -244,7 +277,7 @@ tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
 # If cells are too spread out, you can raise the perplexity.
 #If you have few cells, try a lower perplexity (but never less than 10).
 # https://distill.pub/2016/misread-tsne/
-tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=100,
+tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=30,
                 check_duplicates = F)
 # set check_duplicates = F when testing small number of genes since some cells might have identical profiles
 
