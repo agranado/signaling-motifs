@@ -219,7 +219,7 @@ manual.norm = log(t( t(tiss@raw.data)/total.reads  ) * 1000000 +1)
 tiss@data<-manual.norm
 
 tiss <- ScaleData(object = tiss)
-#this does not work for low number of low-expressed genes: see the PCA part 
+#this does not work for low number of low-expressed genes: see the PCA part
 tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5,num.bin =4)
 tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.2,num.bin =3,x.low.cutoff = 0.2,mean.function=ExpMean)
 
@@ -230,7 +230,7 @@ tiss <- FindVariableGenes(object = tiss, do.plot = TRUE, x.high.cutoff = Inf, y.
 #by default and this can be changed using the pc.genes parameter.
 tiss <- RunPCA(object = tiss, do.print = FALSE, pcs.compute = 13)
 #use all genes of the pathway, instead of only the "variable genes"
-tiss <- RunPCA(object = tiss, pc.genes =bmp.genes, do.print = FALSE, pcs.compute = 20)
+tiss <- RunPCA(object = tiss, pc.genes =bmp.genes, do.print = FALSE, pcs.compute = 25)
 
 
 tiss <- ProjectPCA(object = tiss, do.print = FALSE)
@@ -249,7 +249,7 @@ PCElbowPlot(object = tiss, num.pc = 20)
 # Choose the number of principal components to use.
 # ```{r}
 # Set number of principal components.
-n.pcs = 18
+n.pcs = 10
 # ```
 #
 # The clustering is performed based on a nearest neighbors graph.
@@ -277,7 +277,7 @@ tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
 # If cells are too spread out, you can raise the perplexity.
 #If you have few cells, try a lower perplexity (but never less than 10).
 # https://distill.pub/2016/misread-tsne/
-tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=30,
+tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=70,
                 check_duplicates = F)
 # set check_duplicates = F when testing small number of genes since some cells might have identical profiles
 

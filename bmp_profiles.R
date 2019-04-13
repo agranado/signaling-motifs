@@ -125,6 +125,17 @@ fetch.data<-function(tiss,genes.plot){
   return(data.to.plot)
 } # bug Jan 16 : until here works fine bugID namesBmp4
 
+fetch.data.v3<-function(tiss,genes.plot){
+  data.to.plot <- data.frame(FetchData(object = tiss, vars = genes.plot))
+  colnames(x = data.to.plot) <- genes.plot
+  data.to.plot$cell <- rownames(x = data.to.plot)
+  data.to.plot$id <- tiss@active.ident #extract tSNE cluster
+  data.to.plot$ontology = tiss@meta.data$cell_ontology_class #extract ontology class
+  data.to.plot$tissue = tiss@meta.data$tissue #tissue for each cell
+  return(data.to.plot)
+} # bug Jan 16 : until here works fine bugID namesBmp4
+
+
 #this funciton will calculate the average across a particular variable. In normal DotPlot will do by cluster
 retrieve.genes<-function(data.to.plot,genes.plot,which.var){
   #retrieves a list of genes from the Seurat object and calculates basic statistics
@@ -166,8 +177,8 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
       data.to.plot %>%
         ungroup() %>%
         group_by(genes.plot) %>%
-        mutate(avg.exp.scale = scale(x = avg.exp)) %>% #scale average expression (not log) #mutate adds a new variable to df
-        mutate(avg.exp.scale = MinMax(   #make all values > abs(2.5) = 2.5
+        dplyr::mutate(avg.exp.scale = scale(x = avg.exp)) %>% #scale average expression (not log) #mutate adds a new variable to df
+        dplyr::mutate(avg.exp.scale = MinMax(   #make all values > abs(2.5) = 2.5
           data = avg.exp.scale,
           max = col.max,
           min = col.min
@@ -185,6 +196,7 @@ retrieve.genes<-function(data.to.plot,genes.plot,which.var){
 
     return(data.to.plot)
 }
+
 
 
 #takes the tidy data frame, converts the key-values to matrix and performs clustering
@@ -255,7 +267,7 @@ load.data<-function(pathway="bmp",  which.var = "ontology" ,quant.var = "pct.exp
 pathway.genes<-function(pathway ="bmp"){
   bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
   bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7",
-              "Bmp8a","Gdf3","Gdf9","Gdf10","Gdf11","Gdf15")
+              "Bmp8a","Gdf9","Gdf10","Gdf15")
   bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
 
   notch.all<-c(
@@ -272,14 +284,23 @@ pathway.genes<-function(pathway ="bmp"){
   "Notch1",
   "Notch2",
   "Notch3",
-  "Notch4")
+  "Notch4",
+  "Mfng",
+  "Rfng",
+  "Lfng")
 
 
     if(pathway =="bmp"){
       genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
-    }else if(pathway=="notch"){
-      genes.plot = notch.all
+    }else{
+
+      a = fread( paste("../pathways/", pathway, ".tsv",sep=""))
+      genes.plot = a$To
     }
+
+    # }else if(pathway=="notch"){
+    #   genes.plot = notch.all
+    # }else if(pathway =="")
 
     return (genes.plot)
 }
@@ -385,6 +406,7 @@ plot.pheatmap<-function(dat.matrix,mode="single",kmeans_k=5,cluster.cols=T,scale
 
       g<-do.call(grid.arrange,plot_list)
     }
+
 }
 #bug ID nameBmp4 SOLVED Jan 16th
 ### let's filter the matrix
@@ -528,8 +550,14 @@ save.tSNE.pdf<-function(tiss,gene.list){
 
 }
 #quant vars: avg.exp pct.exp avg.log.exp avg.exp.scale
-heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale",scale.which ="none",filename="",
-                  cellwidth=7.5,cellheight=7.5,fontsize=8,width=10,height=15,filter.type=0){
+#which var : ontology, cell_type, tissue, id
+heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale",
+                  scale.which ="none",filename="",
+                  cellwidth=7.5,cellheight=7.5,fontsize=8,width=10,height=15,
+                  filter.type=0,return_value =F){
+
+
+
   data.to.plot<-fetch.data(tiss,pathway.genes(which.path))
   data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep=",",remove=F) -> data.to.plot
 
@@ -562,16 +590,109 @@ heatmap.pipeline<-function(which.path ="bmp",which.var="ontology",quant.var = "a
     plot.pheatmap(dat.matrix,mode="single",cluster.cols =T,scale.which=scale.which,
         filename =filename,cellwidth=cellwidth,cellheight=cellheight,fontsize=fontsize,width=width,height=height)
 
+  if(return_value){
+      return(dat.matrix)
+  }
+
 }
 
 #filter data.matrix for cell types with low number of cells
 
+
+
+heatmap.pipeline2<-function(seurat.obj = c(), which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale",
+                  scale.which ="none",filename="",
+                  cellwidth=7.5,cellheight=7.5,fontsize=8,width=10,height=15,
+                  filter.type=0,return_value =F,cluster.cols =T){
+
+  if(!is_empty(seurat.obj))
+    tiss = seurat.obj
+
+  genes.plot = pathway.genes(which.path)
+  genes.plot = genes.plot[ genes.plot %in% rownames(tiss@data)]
+
+  data.to.plot<-fetch.data(tiss,genes.plot)
+  data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep=",",remove=F) -> data.to.plot
+
+  #if ontology, filter cell types with less than 50 cells before creating heatmap :[
+
+  if(which.var =="ontology" & filter.type>0){
+    data.to.plot %>% group_by(ontology) %>% dplyr::summarise(n=n()) -> n.cells
+    a<-n.cells$n
+    n.cells$ontology[is.na(n.cells$ontology)] = "NA"
+    names(a)<-n.cells$ontology
+    aa<-as.data.frame(a)
+    filter.celltypes = rownames(aa)[aa>filter.type]
+  }
+
+
+  which.var=which.var
+  quant.var = quant.var
+
+  print("Creating tidy data frame.../n")
+  data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
+  dat.matrix = cluster.variable(data.to.plot,quant.var)
+
+  p2=pheatmap(dat.matrix,
+          show_rownames=T, cluster_cols=cluster.cols, cluster_rows=T, scale=scale.which,
+          cex=1.3, clustering_distance_rows="euclidean", cex=1,
+          clustering_distance_cols="euclidean", clustering_method="complete",
+          cluster.cols=cluster.cols,filename=filename,cellwidth=cellwidth,cellheight=cellheight,fontsize=fontsize,
+          width=width,height=height)
+
+
+}
 # data.to.plot %>% group_by(ontology) %>% dplyr::summarize(n=n()) -> a
 #names(aa)<-a$ontology
 #a$ontology[is.na(a$ontology)]<-"NA"
 #row.names(aa)<-a$ontology
 #as.data.frame(aa)
 #filter.celltypes =row.names(aa)[which(aa>log10(50))]
+
+
+
+heatmap.pipeline2.v3<-function(seurat.obj = c(), which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale",
+                  scale.which ="none",filename=NA,
+                  cellwidth=7.5,cellheight=7.5,fontsize=8,width=10,height=15,
+                  filter.type=0,return_value =F,cluster.cols =T){
+
+  if(!is_empty(seurat.obj))
+    tiss = seurat.obj
+
+  genes.plot = pathway.genes(which.path)
+  genes.plot = genes.plot[ genes.plot %in% rownames(tiss[["RNA"]]@data)]
+
+  data.to.plot<-fetch.data.v3(tiss,genes.plot)
+  data.to.plot %>% unite(col="cell_type",c(tissue,ontology),sep=",",remove=F) -> data.to.plot
+
+  #if ontology, filter cell types with less than 50 cells before creating heatmap :[
+
+  if(which.var =="ontology" & filter.type>0){
+    data.to.plot %>% group_by(ontology) %>% dplyr::summarise(n=n()) -> n.cells
+    a<-n.cells$n
+    n.cells$ontology[is.na(n.cells$ontology)] = "NA"
+    names(a)<-n.cells$ontology
+    aa<-as.data.frame(a)
+    filter.celltypes = rownames(aa)[aa>filter.type]
+  }
+
+
+  which.var=which.var
+  quant.var = quant.var
+
+  print("Creating tidy data frame.../n")
+  data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
+  dat.matrix = cluster.variable(data.to.plot,quant.var)
+
+  p2=pheatmap(dat.matrix,
+          show_rownames=T, cluster_cols=cluster.cols, cluster_rows=T, scale=scale.which,
+          cex=1.3, clustering_distance_rows="euclidean", cex=1,
+          clustering_distance_cols="euclidean", clustering_method="complete",
+          cluster.cols=cluster.cols,filename=filename,cellwidth=cellwidth,cellheight=cellheight,fontsize=fontsize,
+          width=width,height=height)
+
+
+}
 
 distinct.colors = c("#5cc69a",
 "#c05ac5",

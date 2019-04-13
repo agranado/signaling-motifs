@@ -181,7 +181,7 @@ For the top-level clustering, aim to under-cluster instead of over-cluster. It w
 # Set resolution
 res.used <- 1
 
-tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
+tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:50,
     resolution = res.used, print.output = 0, save.SNN = TRUE) #DONE
 ```
 

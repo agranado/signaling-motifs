@@ -81,7 +81,8 @@ tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:n.pcs,
 tiss <- RunTSNE(object = tiss, dims.use = 1:n.pcs, seed.use = 10, perplexity=20,
                                      check_duplicates = F)
 
-#analyse how clusters change with the resolution parameter
+#analyse how clusters change with the resolution parameter 
+# FROM: http://oshlacklab.com/combes-organoid-paper/04_Organoids_Clustering.html
 x11();clustree(tiss)
  # # # # # # #
 #UMAP: https://satijalab.org/seurat/conversion_vignette.html

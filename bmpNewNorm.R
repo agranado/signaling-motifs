@@ -35,6 +35,32 @@ dim(counts.bmp)
 rm(manual.norm)
 rm(manual.norm.bmp)
 
+
+#### additional filter:
+# based on what we know, we can define which cells have active BMP signaling:
+
+# Heidi:
+# I think you need (at a minimum):
+# * A Type I receptor
+    type1.receptor=  c("Acvrl1","Acvr1","Bmpr1a","Acvr1b","Tgfbr1","Bmpr1b","Acvr1c")
+# * A Type II receptor
+    type2.receptor = c("Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
+# * A BMP R-Smad (so, Smad1 or 5 or 8)
+    r_smads =  c("Smad1","Smad5","Smad8")
+# * Smad4 (which complexes with R-Smad)
+#     c("Smad4")
+
+fil1 =  Matrix::colSums(counts.bmp[ rownames(counts.bmp) %in% type1.receptor ,])>0
+fil2 =  Matrix::colSums(counts.bmp[ rownames(counts.bmp) %in% type2.receptor ,])>0
+fil3 =  Matrix::colSums(counts.bmp[ rownames(counts.bmp) %in% r_smads ,])>0
+fil4 =  sum(counts.bmp["Smad4",]>0)
+
+bmp.active.cells = fil1 & fil2 & fil3 & fil4
+
+counts.bmp =counts.bmp[,bmp.active.cells]
+norm.bmp = norm.bmp[, bmp.active.cells]
+meta.data = meta.data[bmp.active.cells,]
+
 library(SC3)
 library(scater)
 
@@ -46,7 +72,7 @@ colnames(tiss@meta.data)[colnames(tiss@meta.data) == 'nUMI'] <- 'nReads' # this 
 #make Seurat think we normalized using their method...
 tiss <- NormalizeData(object = tiss, scale.factor = 1e6) #default normalization by Seurat
 
-nGenes = Matrix::colSums(counts.bmp>0)
+nGene = Matrix::colSums(counts.bmp>0)
 
 tiss@meta.data$nGene = nGene
 
@@ -65,8 +91,10 @@ tiss <- ScaleData(object = tiss)
  PCElbowPlot(object = tiss, num.pc = 20)
 
 res.used = 1.2
-tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:18,
-                      resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T) #DONE
+tiss <- FindClusters(object = tiss, reduction.type = "pca", dims.use = 1:15,
+                      resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T ) #, plot.SNN =T) #DONE
+
+tiss<-SetIdent(tiss,ident=tiss@meta.data$res.1.2) #just in case
 
 tiss <- RunTSNE(object = tiss, dims.use = 1:18, seed.use = 10, perplexity=30,
                                        check_duplicates = F)
@@ -74,5 +102,25 @@ tiss <- RunTSNE(object = tiss, dims.use = 1:18, seed.use = 10, perplexity=30,
 x11();TSNEPlot(tiss)
 
 
+#save heatmaps
+cell.vars=c("ontology","tissue","id")
+quant.vars =c("pct.exp","avg.log.exp","avg.exp")
+for(i in 1:length(cell.vars)){
+  for(j in 1:length(quant.vars)){
+
+    if(cell.vars[i]=="ontology"){
+      width = 10;height=15
+    }else{
+      width = 6; height =10
+    }
+
+
+    filename = paste("plots/bmp_PCA_allCells/heatmaps/clustering_",cell.vars[i] ,"_", quant.vars[j],"_.pdf",sep="")
+
+
+                  heatmap.pipeline2(which.var =cell.vars[i],quant.var = quant.vars[j],filename = filename,
+                  cluster.cols =F,fontsize = 5,width = width,height=height)
+  }
+}
 
 save(tiss,file = "../datasets/TabulaMuris_bmp/bmp_clusteredOK_NoVarGenes_03142019.rda")
