@@ -86,7 +86,7 @@ for( p in 1:length(all.pathways)){
 
     #######
      seurat.pathway <- ScaleData(object = seurat.pathway, features = rownames(seurat.pathway))
-     pcs.compute = round(length(pathway.genes_) * 3/4)
+     pcs.compute = length(pathway.genes_) -1
      seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =10000) #no print
 
     # seurat.pathway <- ProjectPCA(object = seurat.pathway, do.print = FALSE) #no print
@@ -164,8 +164,73 @@ for( p in 1:length(all.pathways)){
       }
     }
 
-    save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda"))
+    save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda"),sep="")
     rm(seurat.pathway)
 
 
 }
+
+
+
+make.plots=function(list.pathways, type ="tsne", file = "",seurat.pathway =NA){
+
+  for(i in 1:length(list.pathways)){
+    which.pathway = list.pathways[i]
+    if(file==""){
+      file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda")
+      load(file)
+    }else{
+      seurat.pathway = seurat.pathway
+    }
+      Sys.sleep(3)
+    filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_TSNE_.pdf",sep="")
+    pdf(filename)
+
+        a=DimPlot(object =seurat.pathway,reduction ="tsne",do.return=T)
+        plot(a)
+
+        a = DimPlot(object =seurat.pathway,reduction ="umap",do.return = T)
+        plot(a)
+
+        a=DimPlot(object =seurat.pathway,reduction ="pca",do.return = T)
+        plot(a)
+
+    dev.off()
+  }
+
+
+}
+
+make.random.pathways<-function(obj = tiss,path = "../pathways/random/", path.size = c(15,20,30,40,60,80,100), nrepeats = 100){
+
+  all.genes = rownames(tiss@data)
+  for(j in 1:nrepeats){
+    rep1 = lapply(path.size, sample, x=all.genes )
+    for(i in 1:length(rep1)){
+      write.csv(rep1[[i]], file =paste( path,"rand_",toString(length(rep1[[i]] )),"_",toString(runif(1)),"_.csv",sep="" ))
+    }
+  }
+}
+
+
+################################################
+do.pca<-function(which.pathway=""){
+    if(exists("seurat.pathway")) rm(seurat.pathway)
+    file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep="")
+    load(file)
+    pathway.genes_ = rownames(seurat.pathway)
+    npcs = length(pathway.genes_)-1
+    seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = npcs,maxit =10000) #
+    return(seurat.pathway@reductions$pca@stdev)
+}
+
+cl <- parallel::makeForkCluster(6)
+doParallel::registerDoParallel(cl)
+
+do.pca.all = function(pathway.list){
+
+    results  = foreach(p = pathway.list) %dopar% do.pca(which.pathway =p)
+
+}
+
+    parallel::stopCluster(cl)

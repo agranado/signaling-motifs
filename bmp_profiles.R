@@ -271,28 +271,31 @@ pathway.genes<-function(pathway ="bmp"){
   bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
 
   notch.all<-c(
-  "Dll1",
-  "Dll3",
-  "Dll4",
-  "Dtx1",
-  "Jag1",
-  "Jag2",
-  "Adam10",
-  "Psen1",
-  "Psen2",
-  "Psenen",
-  "Notch1",
-  "Notch2",
-  "Notch3",
-  "Notch4",
-  "Mfng",
-  "Rfng",
-  "Lfng")
+    "Dll1",
+    "Dll3",
+    "Dll4",
+    "Dtx1",
+    "Jag1",
+    "Jag2",
+    "Adam10",
+    "Psen1",
+    "Psen2",
+    "Psenen",
+    "Notch1",
+    "Notch2",
+    "Notch3",
+    "Notch4",
+    "Mfng",
+    "Rfng",
+    "Lfng")
 
 
     if(pathway =="bmp"){
       genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
-    }else{
+    }else if(grep("rand",pathway)){
+          a = fread( paste( "../pathways/random/",pathway,sep=""))
+          genes.plot = a$V2[-1]
+    }else{ #real pathway
 
       a = fread( paste("../pathways/", pathway, ".tsv",sep=""))
       genes.plot = a$To
