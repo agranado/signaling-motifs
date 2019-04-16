@@ -102,7 +102,7 @@ for( p in 1:length(all.pathways)){
 
 
 
-     pca.used = pca.manual[p]
+     #pca.used = pca.manual[p]
 
      seurat.pathway = JackStraw(seurat.pathway, num.replicate = 200, prop.freq = .1)
      seurat.pathway = ScoreJackStraw(seurat.pathway, dims = 1:10)
