@@ -4,6 +4,7 @@ setwd("/home/agranado/MEGA/Caltech/rnaseq/signaling-clusters/")
 
 #optimize for Seurat 3
 load("../tabula-muris/tiss_filteredJan10_2019.rdata")
+tiss = UpdateSeuratObject(tiss)
 source("bmp_profiles.R")
 
 library(Matrix)
@@ -68,7 +69,15 @@ setup.seurat<-function(counts.pathway, norm.pathway, meta.data){
 
 
 all.pathways = c("glucose","notch","shh","inositol","mtorc")
+
+all.pathways = list.files("../pathways/")
+all.pathways = all.pathways[grep(".csv",all.pathways)]
+all.pathways = gsub(patter = "\\.csv$","",all.pathways)
+
+
+#main clustering, plotting , pca ALL pipeline
 pca.manual = c(9,11,14,13,8)
+plot.heatmaps = F
 for( p in 1:length(all.pathways)){
 
     which.pathway = all.pathways[p]
@@ -91,7 +100,6 @@ for( p in 1:length(all.pathways)){
 
     # seurat.pathway <- ProjectPCA(object = seurat.pathway, do.print = FALSE) #no print
 
-     a= ElbowPlot(object = seurat.pathway, ndims = pcs.compute)
 
 
      pca.used = pca.manual[p]
@@ -108,6 +116,7 @@ for( p in 1:length(all.pathways)){
 
      #plot call
      filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_elbow_", toString(pcs.compute), "_.pdf",sep="")
+     a= ElbowPlot(object = seurat.pathway, ndims = pcs.compute)
      pdf(filename)
        plot(a)
      dev.off()
@@ -139,28 +148,30 @@ for( p in 1:length(all.pathways)){
     filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_TSNE_", toString(pcs.compute), "_.pdf",sep="")
     pdf(filename)
     # TSNEPlot(seurat.pathway)
-    DimPlot(seurat.pathway,reduction="tsne")
+    a = DimPlot(seurat.pathway,reduction="tsne")
+    plot(a)
     dev.off()
 
+    if(plot.heatmaps ==T){
+      #save heatmaps
+      cell.vars=c("ontology","tissue","id")
+      quant.vars =c("pct.exp","avg.log.exp","avg.exp")
+      for(i in 1:length(cell.vars)){
+        for(j in 1:length(quant.vars)){
 
-    #save heatmaps
-    cell.vars=c("ontology","tissue","id")
-    quant.vars =c("pct.exp","avg.log.exp","avg.exp")
-    for(i in 1:length(cell.vars)){
-      for(j in 1:length(quant.vars)){
+          if(cell.vars[i]=="ontology"){
+            width = 10;height=15
+          }else{
+            width = 6; height =10
+          }
 
-        if(cell.vars[i]=="ontology"){
-          width = 10;height=15
-        }else{
-          width = 6; height =10
+
+          filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_clustering_",cell.vars[i] ,"_", quant.vars[j],"_.pdf",sep="")
+
+
+                        heatmap.pipeline2.v3(seurat.obj  = seurat.pathway, which.path = which.pathway, which.var =cell.vars[i],quant.var = quant.vars[j],filename = filename,
+                        cluster.cols =T,fontsize = 5,width = width,height=height)
         }
-
-
-        filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_clustering_",cell.vars[i] ,"_", quant.vars[j],"_.pdf",sep="")
-
-
-                      heatmap.pipeline2.v3(seurat.obj  = seurat.pathway, which.path = which.pathway, which.var =cell.vars[i],quant.var = quant.vars[j],filename = filename,
-                      cluster.cols =T,fontsize = 5,width = width,height=height)
       }
     }
 
@@ -203,7 +214,7 @@ make.plots=function(list.pathways, type ="tsne", file = "",seurat.pathway =NA){
 
 make.random.pathways<-function(obj = tiss,path = "../pathways/random/", path.size = c(15,20,30,40,60,80,100), nrepeats = 100){
 
-  all.genes = rownames(tiss@data)
+  all.genes = rownames(tiss[['RNA']]@data)
   for(j in 1:nrepeats){
     rep1 = lapply(path.size, sample, x=all.genes )
     for(i in 1:length(rep1)){
@@ -214,6 +225,7 @@ make.random.pathways<-function(obj = tiss,path = "../pathways/random/", path.siz
 
 
 ################################################
+#loads one of the previously saved objects
 do.pca<-function(which.pathway=""){
     if(exists("seurat.pathway")) rm(seurat.pathway)
     file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep="")
@@ -223,7 +235,25 @@ do.pca<-function(which.pathway=""){
     seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = npcs,maxit =10000) #
     return(seurat.pathway@reductions$pca@stdev)
 }
+#takes the list and tiss object
+do.pca.from.list<-function(which.pathway = ""){
+  pathway.genes_ = pathway.genes(pathway = which.pathway)
+  res.list = get.pathway.expression( pathway.genes_)
+  counts.pathway = res.list[[1]]
+  norm.pathway = res.list[[2]]
+  meta.data = res.list[[3]]
 
+  #function call
+   seurat.pathway = setup.seurat( counts.pathway, norm.pathway, meta.data) #works v3
+
+
+   seurat.pathway <- ScaleData(object = seurat.pathway, features = rownames(seurat.pathway))
+   pcs.compute = length(pathway.genes_) -1
+   seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =10000) #no print
+
+   return(seruat.pathway )
+}
+#############################################
 cl <- parallel::makeForkCluster(6)
 doParallel::registerDoParallel(cl)
 

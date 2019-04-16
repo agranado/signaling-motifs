@@ -292,12 +292,12 @@ pathway.genes<-function(pathway ="bmp"){
 
     if(pathway =="bmp"){
       genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
-    }else if(grep("rand",pathway)){
+    }else if(length(grep("rand",pathway))>0){
           a = fread( paste( "../pathways/random/",pathway,sep=""))
           genes.plot = a$V2[-1]
     }else{ #real pathway
 
-      a = fread( paste("../pathways/", pathway, ".tsv",sep=""))
+      a = fread( paste("../pathways/", pathway, ".csv",sep=""))
       genes.plot = a$To
     }
 
