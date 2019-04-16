@@ -72,15 +72,15 @@ all.pathways = c("glucose","notch","shh","inositol","mtorc")
 
 all.pathways = list.files("../pathways/")
 all.pathways = all.pathways[grep(".csv",all.pathways)]
-all.pathways = gsub(patter = "\\.csv$","",all.pathways)
+all.pathways = gsub(pattern = "\\.csv$","",all.pathways)
 
 
 #main clustering, plotting , pca ALL pipeline
 pca.manual = c(9,11,14,13,8)
 plot.heatmaps = F
-for( p in 1:length(all.pathways)){
-
-    which.pathway = all.pathways[p]
+#for( p in 1:length(all.pathways)){
+full.pipeline<-function(which.pathway){
+    #which.pathway = all.pathways[p]
     pathway.genes_ = pathway.genes(which.pathway)
     #check for existing genes in the tiss object before retrieving data
     pathway.genes_ = pathway.genes_[pathway.genes_ %in% rownames(tiss[["RNA"]]@counts)]
@@ -96,6 +96,8 @@ for( p in 1:length(all.pathways)){
     #######
      seurat.pathway <- ScaleData(object = seurat.pathway, features = rownames(seurat.pathway))
      pcs.compute = length(pathway.genes_) -1
+     pcs.compute = 14
+     pcs.compute = round(length(pathway.genes_) * 3/4)
      seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =10000) #no print
 
     # seurat.pathway <- ProjectPCA(object = seurat.pathway, do.print = FALSE) #no print
@@ -105,12 +107,13 @@ for( p in 1:length(all.pathways)){
      #pca.used = pca.manual[p]
 
      seurat.pathway = JackStraw(seurat.pathway, num.replicate = 200, prop.freq = .1)
-     seurat.pathway = ScoreJackStraw(seurat.pathway, dims = 1:10)
+     seurat.pathway = ScoreJackStraw(seurat.pathway, dims = 1:pcs.compute)
 
 
      filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_JackStraw_", toString(pcs.compute), "_.pdf",sep="")
      pdf(filename)
-      JackStrawPlot(seurat.pathway, dims = 1:10)
+      a = JackStrawPlot(seurat.pathway, dims = 1:pcs.compute)
+      plot(a)
      dev.off()
 
 
@@ -127,7 +130,7 @@ for( p in 1:length(all.pathways)){
 
 
     res.used = 0.9
-    seurat.pathway = FindNeighbors(seurat.pathway, dims = 1:10) #for Seurat3
+    seurat.pathway = FindNeighbors(seurat.pathway, dims = 1:pcs.compute) #for Seurat3
 
   #  seurat.pathway <- FindClusters(object = seurat.pathway, reduction.type = "pca", dims.use = 1:pca.used,
   #                        resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T ) #, plot.SNN =T) #DONE
@@ -140,8 +143,8 @@ for( p in 1:length(all.pathways)){
     #seurat.pathway <- RunTSNE(object = seurat.pathway, dims.use = 1:pca.used, seed.use = 10, perplexity=30,
     #                                       check_duplicates = F)
     #v3:
-    seurat.pathway<-RunTSNE(seurat.pathway, dims = 1:10, perplexity = 30)
-    seurat.pathway = RunUMAP(seurat.pathway, dims = 1:10)
+    seurat.pathway<-RunTSNE(seurat.pathway, dims = 1:pcs.compute, perplexity = 30)
+    #    seurat.pathway = RunUMAP(seurat.pathway, dims = 1:pcs.compute)
 
 
     #plot call :
@@ -238,6 +241,8 @@ do.pca<-function(which.pathway=""){
 #takes the list and tiss object
 do.pca.from.list<-function(which.pathway = "",maxit =10000){
   pathway.genes_ = pathway.genes(pathway = which.pathway)
+  pathway.genes_ = pathway.genes_[pathway.genes_ %in% rownames(tiss[["RNA"]]@counts)]
+
   res.list = get.pathway.expression( pathway.genes_)
   counts.pathway = res.list[[1]]
   norm.pathway = res.list[[2]]
@@ -251,12 +256,20 @@ do.pca.from.list<-function(which.pathway = "",maxit =10000){
    #pcs.compute = length(pathway.genes_) -1
    #seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =maxit) #no print
    pca.res = princomp(t(as.matrix(seurat.pathway[["RNA"]]@data)))
-    save(seurat.pathway, pca.res,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+   cor.matrix = cor(t(as.matrix(seurat.pathway[["RNA"]]@data)))
+
+   if(length(grep("rand",which.pathway))>0){ #save all random pathways in a subfolder
+     save(seurat.pathway, pca.res, cor.matrix,file = paste("../datasets/TabulaMuris_bmp/random/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+
+   }else{
+     save(seurat.pathway, pca.res,cor.matrix, file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+   }
+   print( paste( "DONE ", which.pathway, "...\n"))
 
    return(seurat.pathway)
 }
 #############################################
-cl <- parallel::makeForkCluster(6)
+cl <- parallel::makeForkCluster(20)
 doParallel::registerDoParallel(cl)
 
 do.pca.all = function(pathway.list){
