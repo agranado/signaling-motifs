@@ -248,10 +248,10 @@ do.pca.from.list<-function(which.pathway = "",maxit =10000){
 
 
    seurat.pathway <- ScaleData(object = seurat.pathway, features = rownames(seurat.pathway))
-   pcs.compute = length(pathway.genes_) -1
-   seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =maxit) #no print
-
-    save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+   #pcs.compute = length(pathway.genes_) -1
+   #seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =maxit) #no print
+   pca.res = princomp(t(as.matrix(seurat.pathway[["RNA"]]@data)))
+    save(seurat.pathway, pca.res,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
 
    return(seurat.pathway)
 }
