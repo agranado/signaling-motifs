@@ -236,7 +236,7 @@ do.pca<-function(which.pathway=""){
     return(seurat.pathway@reductions$pca@stdev)
 }
 #takes the list and tiss object
-do.pca.from.list<-function(which.pathway = ""){
+do.pca.from.list<-function(which.pathway = "",maxit =10000){
   pathway.genes_ = pathway.genes(pathway = which.pathway)
   res.list = get.pathway.expression( pathway.genes_)
   counts.pathway = res.list[[1]]
@@ -249,11 +249,11 @@ do.pca.from.list<-function(which.pathway = ""){
 
    seurat.pathway <- ScaleData(object = seurat.pathway, features = rownames(seurat.pathway))
    pcs.compute = length(pathway.genes_) -1
-   seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =10000) #no print
+   seurat.pathway <- RunPCA(object = seurat.pathway, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =maxit) #no print
 
-    save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda"),sep="")
+    save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
 
-   return(seruat.pathway )
+   return(seurat.pathway)
 }
 #############################################
 cl <- parallel::makeForkCluster(6)
@@ -264,5 +264,13 @@ do.pca.all = function(pathway.list){
     results  = foreach(p = pathway.list) %dopar% do.pca(which.pathway =p)
 
 }
+
+
+do.pca.all.list = function(pathway.list){
+
+    results  = foreach(p = pathway.list) %dopar% do.pca.from.list(which.pathway =p)
+
+}
+
 
     parallel::stopCluster(cl)
