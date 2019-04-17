@@ -4,13 +4,15 @@ setwd("/home/agranado/MEGA/Caltech/rnaseq/signaling-clusters/")
 
 #optimize for Seurat 3
 load("../tabula-muris/tiss_filteredJan10_2019.rdata")
-tiss = UpdateSeuratObject(tiss)
 source("bmp_profiles.R")
 
 library(Matrix)
 library(SC3)
 library(scater)
 library(Seurat)
+library(data.table)
+
+tiss = UpdateSeuratObject(tiss)
 
 get.pathway.expression<-function( pathway.genes_,  min.genes.per.cell = 3,frac.express.components = 2){
   #let's take the raw data to manual normalization then SC3
@@ -68,7 +70,7 @@ setup.seurat<-function(counts.pathway, norm.pathway, meta.data){
 }
 
 
-all.pathways = c("glucose","notch","shh","inositol","mtorc")
+#all.pathways = c("glucose","notch","shh","inositol","mtorc")
 
 all.pathways = list.files("../pathways/")
 all.pathways = all.pathways[grep(".csv",all.pathways)]
@@ -77,10 +79,11 @@ all.pathways = gsub(pattern = "\\.csv$","",all.pathways)
 
 #main clustering, plotting , pca ALL pipeline
 pca.manual = c(9,11,14,13,8)
-plot.heatmaps = F
+
 #for( p in 1:length(all.pathways)){
 full.pipeline<-function(which.pathway){
     #which.pathway = all.pathways[p]
+    plot.heatmaps = F
     pathway.genes_ = pathway.genes(which.pathway)
     #check for existing genes in the tiss object before retrieving data
     pathway.genes_ = pathway.genes_[pathway.genes_ %in% rownames(tiss[["RNA"]]@counts)]
@@ -106,15 +109,15 @@ full.pipeline<-function(which.pathway){
 
      #pca.used = pca.manual[p]
 
-     seurat.pathway = JackStraw(seurat.pathway, num.replicate = 200, prop.freq = .1)
-     seurat.pathway = ScoreJackStraw(seurat.pathway, dims = 1:pcs.compute)
-
-
-     filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_JackStraw_", toString(pcs.compute), "_.pdf",sep="")
-     pdf(filename)
-      a = JackStrawPlot(seurat.pathway, dims = 1:pcs.compute)
-      plot(a)
-     dev.off()
+     # seurat.pathway = JackStraw(seurat.pathway, num.replicate = 200, prop.freq = .1)
+     # seurat.pathway = ScoreJackStraw(seurat.pathway, dims = 1:pcs.compute)
+     #
+     #
+     # filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_JackStraw_", toString(pcs.compute), "_.pdf",sep="")
+     # pdf(filename)
+     #  a = JackStrawPlot(seurat.pathway, dims = 1:pcs.compute)
+     #  plot(a)
+     # dev.off()
 
 
      #plot call
@@ -144,7 +147,7 @@ full.pipeline<-function(which.pathway){
     #                                       check_duplicates = F)
     #v3:
     seurat.pathway<-RunTSNE(seurat.pathway, dims = 1:pcs.compute, perplexity = 30)
-    #    seurat.pathway = RunUMAP(seurat.pathway, dims = 1:pcs.compute)
+    seurat.pathway = RunUMAP(seurat.pathway, dims = 1:pcs.compute)
 
 
     #plot call :
@@ -152,6 +155,8 @@ full.pipeline<-function(which.pathway){
     pdf(filename)
     # TSNEPlot(seurat.pathway)
     a = DimPlot(seurat.pathway,reduction="tsne")
+    plot(a)
+    a = DimPlot(seurat.pathway,reduction="umap")
     plot(a)
     dev.off()
 
@@ -178,7 +183,7 @@ full.pipeline<-function(which.pathway){
       }
     }
 
-    save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda"),sep="")
+    save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
     rm(seurat.pathway)
 
 
@@ -269,7 +274,7 @@ do.pca.from.list<-function(which.pathway = "",maxit =10000){
    return(seurat.pathway)
 }
 #############################################
-cl <- parallel::makeForkCluster(20)
+cl <- parallel::makeForkCluster(10)
 doParallel::registerDoParallel(cl)
 
 do.pca.all = function(pathway.list){
