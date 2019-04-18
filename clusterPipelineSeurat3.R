@@ -81,9 +81,9 @@ all.pathways = gsub(pattern = "\\.csv$","",all.pathways)
 pca.manual = c(9,11,14,13,8)
 
 #for( p in 1:length(all.pathways)){
-full.pipeline<-function(which.pathway){
+full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T){
     #which.pathway = all.pathways[p]
-    plot.heatmaps = F
+
     pathway.genes_ = pathway.genes(which.pathway)
     #check for existing genes in the tiss object before retrieving data
     pathway.genes_ = pathway.genes_[pathway.genes_ %in% rownames(tiss[["RNA"]]@counts)]
@@ -121,12 +121,13 @@ full.pipeline<-function(which.pathway){
 
 
      #plot call
-     filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_elbow_", toString(pcs.compute), "_.pdf",sep="")
-     a= ElbowPlot(object = seurat.pathway, ndims = pcs.compute)
-     pdf(filename)
-       plot(a)
-     dev.off()
-
+     if(plot.elbow == T){
+         filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_elbow_", toString(pcs.compute), "_.pdf",sep="")
+         a= ElbowPlot(object = seurat.pathway, ndims = pcs.compute)
+         pdf(filename)
+           plot(a)
+         dev.off()
+     }
 
     # min.pcn = 4
     # diff(a$data$data.use[-c(1:min.pcn)])
@@ -149,16 +150,17 @@ full.pipeline<-function(which.pathway){
     seurat.pathway<-RunTSNE(seurat.pathway, dims = 1:pcs.compute, perplexity = 30)
     seurat.pathway = RunUMAP(seurat.pathway, dims = 1:pcs.compute)
 
-
-    #plot call :
-    filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_TSNE_", toString(pcs.compute), "_.pdf",sep="")
-    pdf(filename)
-    # TSNEPlot(seurat.pathway)
-    a = DimPlot(seurat.pathway,reduction="tsne")
-    plot(a)
-    a = DimPlot(seurat.pathway,reduction="umap")
-    plot(a)
-    dev.off()
+    if( plot.tsne ==T){
+        #plot call :
+        filename = paste("../results/tabulaMurisSeurat/", which.pathway, "_TSNE_", toString(pcs.compute), "_.pdf",sep="")
+        pdf(filename)
+        # TSNEPlot(seurat.pathway)
+        a = DimPlot(seurat.pathway,reduction="tsne")
+        plot(a)
+        a = DimPlot(seurat.pathway,reduction="umap")
+        plot(a)
+        dev.off()
+    }
 
     if(plot.heatmaps ==T){
       #save heatmaps
@@ -183,7 +185,14 @@ full.pipeline<-function(which.pathway){
       }
     }
 
-    save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+
+    if(  length(grep(".*rand.*",which.pathway))>0 ){
+    #Save random pathways in a different directory
+      save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/random/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+    }else{
+      save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+    }
+
     rm(seurat.pathway)
 
 
@@ -292,3 +301,30 @@ do.pca.all.list = function(pathway.list){
 
 
     parallel::stopCluster(cl)
+
+#######
+#######
+# DATA analysis
+extractSeuratList<-function(all.random = ""){
+    npc = array(0, length(all.random))
+    n.clusters = array(0, length(all.random))
+    tot.var = array(0, length(all.random))
+    npc.list.nat = list()
+    for(i in 1:length(all.random)){
+        load(all.random[i])
+        scaled = seurat.pathway[['RNA']]@scale.data
+        pca.scaled = princomp(t(scaled))
+        pct.var =pca.scaled$sdev^2/sum(pca.scaled$sdev^2)
+        tot.var[i] =sum(pca.scaled$sdev^2)
+        npc[i] =  length(which(cumsum(pct.var)<0.5))
+        n.clusters[i]  =length(unique(seurat.pathway$seurat_clusters))
+        npc.list.nat[[i]] = pct.var
+        rm(seurat.pathway)
+    }
+
+    ngenes =do.call("rbind",lapply(npc.list.nat, length))
+    cluster.data = data.frame(clusters = n.clusters, ngenes = ngenes, npc = npc, tot.var = tot.var)
+    cluster.data =as_tibble(cluster.data)
+
+    return(list(cluster.data, npc.list.nat))
+}
