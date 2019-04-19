@@ -10,11 +10,12 @@ library(SC3)
 library(scater)
 library(Seurat)
 library(data.table)
+library(doParallel)
 
 load.seurat<-function(){
   load("../tabula-muris/tiss_filteredJan10_2019.rdata")
   tiss = UpdateSeuratObject(tiss)
-  
+
 }
 
 
