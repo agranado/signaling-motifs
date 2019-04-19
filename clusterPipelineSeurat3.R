@@ -1,10 +1,9 @@
 #latest method (after loading the seurat.pathway object )
 
-setwd("/home/agranado/MEGA/Caltech/rnaseq/signaling-clusters/")
+#setwd("/home/agranado/MEGA/Caltech/rnaseq/signaling-clusters/")
 
 #optimize for Seurat 3
 load("../tabula-muris/tiss_filteredJan10_2019.rdata")
-source("bmp_profiles.R")
 
 library(Matrix)
 library(SC3)
@@ -14,22 +13,57 @@ library(data.table)
 
 tiss = UpdateSeuratObject(tiss)
 
-get.pathway.expression<-function( pathway.genes_,  min.genes.per.cell = 3,frac.express.components = 2){
+
+#get the annotated genes (manually curated lists)
+pathway.genes<-function(pathway ="bmp"){
+  bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
+  bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7",
+              "Bmp8a","Gdf9","Gdf10","Gdf15")
+  bmp.smads<-c("Smad1" ,"Smad2" ,"Smad3", "Smad4", "Smad5", "Smad6", "Smad7", "Smad9")
+
+  notch.all<-c(
+    "Dll1","Dll3","Dll4","Dtx1","Jag1","Jag2","Adam10","Psen1","Psen2","Psenen","Notch1",
+    "Notch2","Notch3","Notch4","Mfng","Rfng","Lfng")
+
+
+    if(pathway =="bmp"){
+      genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
+    }else if(length(grep("rand",pathway))>0){
+          a = fread( paste( "../pathways/random/",pathway,sep=""))
+          genes.plot = a$V2[-1]
+    }else{ #real pathway
+
+      a = fread( paste("../pathways/", pathway, ".csv",sep=""))
+      genes.plot = a$To
+    }
+
+    # }else if(pathway=="notch"){
+    #   genes.plot = notch.all
+    # }else if(pathway =="")
+
+    return (genes.plot)
+}
+#optional:
+
+get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2){
+  # fold.nreads :   min(nreads) > fold.nreads * length(pathway)
   #let's take the raw data to manual normalization then SC3
   #manual.norm<-tiss@raw.data
   manual.norm<-tiss[["RNA"]]@counts
   #take pathway genes to filter cells:
   manual.norm.pathway<-manual.norm[pathway.genes_,]
   #at least twice the number of genes for nReads
-  count.cells = Matrix::colSums(manual.norm.pathway)
-  manual.norm.pathway = manual.norm.pathway[, count.cells>length(pathway.genes_)* frac.express.components]
+  count.cells = Matrix::colSums(manual.norm.pathway) #genes per cell
+  #min nunmber genes per cell:
+  manual.norm.pathway = manual.norm.pathway[, count.cells>length(pathway.genes_)* fold.nreads]
   #at least 3 genes have >0 expression values
   genes.at.least.one = Matrix::colSums(manual.norm.pathway>0)
+
   manual.norm.pathway = manual.norm.pathway[, genes.at.least.one>= min.genes.per.cell]
   #NOW: let's take the cells in the new filtered matrix from the normalized data in seurat.pathway@data
   #
 
-
+  min.genes.per.cell = round(length(pathway.genes_) * min.frac.genes.expressed)
   #let's find which cells overlap with the seurat.pathway@data (we did take raw.data after all...)
   manual.norm.pathway=manual.norm.pathway[,which(colnames(manual.norm.pathway) %in% colnames(tiss[["RNA"]]@data))]
 
@@ -71,14 +105,18 @@ setup.seurat<-function(counts.pathway, norm.pathway, meta.data){
 
 
 #all.pathways = c("glucose","notch","shh","inositol","mtorc")
-
+# LOAD all pathway names
 all.pathways = list.files("../pathways/")
 all.pathways = all.pathways[grep(".csv",all.pathways)]
 all.pathways = gsub(pattern = "\\.csv$","",all.pathways)
 
+all.random = list.files("../pathways/random")
+all.random = all.random[grep(".csv",all.random)]
+all.random = gsub(pattern = "\\.csv$","",all.random)
+
 
 #main clustering, plotting , pca ALL pipeline
-pca.manual = c(9,11,14,13,8)
+#pca.manual = c(9,11,14,13,8)
 
 #for( p in 1:length(all.pathways)){
 full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T){
@@ -283,8 +321,9 @@ do.pca.from.list<-function(which.pathway = "",maxit =10000){
    return(seurat.pathway)
 }
 #############################################
-cl <- parallel::makeForkCluster(10)
-doParallel::registerDoParallel(cl)
+#  n.cores  = 10
+#  cl <- parallel::makeForkCluster(n.cores)
+#  doParallel::registerDoParallel(cl)
 
 do.pca.all = function(pathway.list){
 
