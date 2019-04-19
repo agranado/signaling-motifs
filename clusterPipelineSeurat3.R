@@ -339,7 +339,7 @@ do.pca.all.list = function(pathway.list){
 }
 
 
-    parallel::stopCluster(cl)
+#    parallel::stopCluster(cl)
 
 #######
 #######
