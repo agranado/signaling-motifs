@@ -48,7 +48,7 @@ pathway.genes<-function(pathway ="bmp"){
 }
 #optional:
 
-get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2){
+get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2, min.frac.cells.expressing = 0.01){
   # fold.nreads :   min(nreads) > fold.nreads * length(pathway)
   #let's take the raw data to manual normalization then SC3
   #manual.norm<-tiss@raw.data
@@ -57,16 +57,18 @@ get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.
   manual.norm.pathway<-manual.norm[pathway.genes_,]
   #at least twice the number of genes for nReads
   count.cells = Matrix::colSums(manual.norm.pathway) #genes per cell
-  #min nunmber genes per cell:
+  #min nunmber READS per cell: rough
   manual.norm.pathway = manual.norm.pathway[, count.cells>length(pathway.genes_)* fold.nreads]
-  #at least 3 genes have >0 expression values
-  genes.at.least.one = Matrix::colSums(manual.norm.pathway>0)
-  min.genes.per.cell  = round(length(pathway.genes_)*min.frac.genes.expressed)
-  manual.norm.pathway = manual.norm.pathway[, genes.at.least.one>= min.genes.per.cell]
+  #Cells at least X genes have >0 expression values
+
+  min.genes.per.cell = Matrix::colSums(manual.norm.pathway>0) >= min.frac.genes.expressed * dim(manual.norm.pathay)[1]
+
+  min.cells.per.gene  = Matrix::rowSums(manual.norm.pathway>0)>= min.frac.cells.expressing * dim(manual.norm.pathway)[2]
+ # BI VARIATE FILTER:
+  manual.norm.pathway = manual.norm.pathway[min.cells.per.gene, min.genes.per.cell]
   #NOW: let's take the cells in the new filtered matrix from the normalized data in seurat.pathway@data
   #
 
-  min.genes.per.cell = round(length(pathway.genes_) * min.frac.genes.expressed)
   #let's find which cells overlap with the seurat.pathway@data (we did take raw.data after all...)
   manual.norm.pathway=manual.norm.pathway[,which(colnames(manual.norm.pathway) %in% colnames(tiss[["RNA"]]@data))]
 
