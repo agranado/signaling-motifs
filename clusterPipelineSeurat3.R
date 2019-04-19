@@ -14,6 +14,7 @@ library(data.table)
 load.seurat<-function(){
   load("../tabula-muris/tiss_filteredJan10_2019.rdata")
   tiss = UpdateSeuratObject(tiss)
+  
 }
 
 
@@ -61,7 +62,7 @@ get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.
   manual.norm.pathway = manual.norm.pathway[, count.cells>length(pathway.genes_)* fold.nreads]
   #Cells at least X genes have >0 expression values
 
-  min.genes.per.cell = Matrix::colSums(manual.norm.pathway>0) >= min.frac.genes.expressed * dim(manual.norm.pathay)[1]
+  min.genes.per.cell = Matrix::colSums(manual.norm.pathway>0) >= min.frac.genes.expressed * dim(manual.norm.pathway)[1]
 
   min.cells.per.gene  = Matrix::rowSums(manual.norm.pathway>0)>= min.frac.cells.expressing * dim(manual.norm.pathway)[2]
  # BI VARIATE FILTER:
@@ -327,8 +328,8 @@ do.pca.from.list<-function(which.pathway = "",maxit =10000){
 }
 #############################################
 #  n.cores  = 10
-#  cl <- parallel::makeForkCluster(n.cores)
-#  doParallel::registerDoParallel(cl)
+# registerDoParallel(cores=2)
+# getDoParWorkers()
 
 do.pca.all = function(pathway.list){
 
