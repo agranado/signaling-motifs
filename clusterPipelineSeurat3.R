@@ -29,7 +29,7 @@ pathway.genes<-function(pathway ="bmp"){
     if(pathway =="bmp"){
       genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
     }else if(length(grep("rand",pathway))>0){
-          a = fread( paste( "../pathways/random/",pathway,sep=""))
+          a = fread( paste( "../pathways/random/",pathway,".csv",sep=""))
           genes.plot = a$V2[-1]
     }else{ #real pathway
 
@@ -58,7 +58,7 @@ get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.
   manual.norm.pathway = manual.norm.pathway[, count.cells>length(pathway.genes_)* fold.nreads]
   #at least 3 genes have >0 expression values
   genes.at.least.one = Matrix::colSums(manual.norm.pathway>0)
-
+  min.genes.per.cell  = round(length(pathway.genes_)*min.frac.genes.expressed)
   manual.norm.pathway = manual.norm.pathway[, genes.at.least.one>= min.genes.per.cell]
   #NOW: let's take the cells in the new filtered matrix from the normalized data in seurat.pathway@data
   #
