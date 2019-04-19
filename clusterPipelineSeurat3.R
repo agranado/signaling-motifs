@@ -3,7 +3,7 @@
 #setwd("/home/agranado/MEGA/Caltech/rnaseq/signaling-clusters/")
 
 #optimize for Seurat 3
-load("../tabula-muris/tiss_filteredJan10_2019.rdata")
+
 
 library(Matrix)
 library(SC3)
@@ -11,7 +11,10 @@ library(scater)
 library(Seurat)
 library(data.table)
 
-tiss = UpdateSeuratObject(tiss)
+load.seurat<-function(){
+  load("../tabula-muris/tiss_filteredJan10_2019.rdata")
+  tiss = UpdateSeuratObject(tiss)
+}
 
 
 #get the annotated genes (manually curated lists)
