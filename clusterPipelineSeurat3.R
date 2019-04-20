@@ -11,6 +11,7 @@ library(scater)
 library(Seurat)
 library(data.table)
 library(doParallel)
+library(tibble)
 
 load.seurat<-function(){
   load("../tabula-muris/tiss_filteredJan10_2019.rdata")
@@ -81,7 +82,7 @@ get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.
 
 
   counts.pathway<-manual.norm.pathway #this was always the raw data
-  norm.pathway<-tiss[["RNA"]]@data [pathway.genes_,colnames(manual.norm.pathway)]
+  norm.pathway<-tiss[["RNA"]]@data [rownames(manual.norm.pathway),colnames(manual.norm.pathway)]
   dim(counts.pathway)
   rm(manual.norm)
   rm(manual.norm.pathway)
@@ -274,7 +275,7 @@ make.plots=function(list.pathways, type ="tsne", file = "",seurat.pathway =NA){
 
 }
 
-make.random.pathways<-function(obj = tiss,path = "../pathways/random/", path.size = c(15,20,30,40,60,80,100), nrepeats = 100){
+make.random.pathways<-function(obj = tiss,path = "../pathways/random/", path.size = c(25,35,45,55,65,70,120), nrepeats = 30){
 
   all.genes = rownames(tiss[['RNA']]@data)
   for(j in 1:nrepeats){
@@ -373,6 +374,37 @@ extractSeuratList<-function(all.random = "", pc.cutoff = 0.5){
     cluster.data =as_tibble(cluster.data)
 
     return(list(cluster.data, npc.list.nat))
+}
+#
+extractPathwayNames <- function(all.natural){
+  #split by diretory
+  mat = do.call("cbind",strsplit(all.natural,"/"))
+  mat[4,]
+  #split by _ (put by me)
+  pathway.names =do.call("cbind",strsplit(mat[4,],"_"))[1,]
+  pathway.names[3] = "caspaseActE"
+  pathway.naNes[4] = "caspaseActI"
+
+}
+
+
+
+
+all.natural= list.files("./datasets/TabulaMuris_bmp/")
+all.natural= paste( "./datasets/TabulaMuris_bmp/", all.natural,sep="")
+#random
+
+#assuming natural pathways are in the subfolder
+#and randomlist file was downloaded from AWS
+prepareDataFrames <-function(random.list.file = "datasets/outputAWS/extractedList_457randomSeuratObjets_Apr20OrikaFlat.rda", all.natural){
+  results.nat= extractSeuratList(all.natural)
+  cluster.data.nat=results.nat[[1]]
+  cluster.data.nat$name = pathway.names
+
+  #random
+  load(random.list.file)
+  results.rand = results
+  rm(results)
 }
 
 ## use as:   > p = plot.nat.vs.rand(cluster.stats,cluster.data.nat)
