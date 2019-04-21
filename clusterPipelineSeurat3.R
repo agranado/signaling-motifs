@@ -51,7 +51,7 @@ pathway.genes<-function(pathway ="bmp"){
 }
 #optional:
 
-get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2, min.frac.cells.expressing = 0.01){
+get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2, min.frac.cells.expressing = 0.005){
   # fold.nreads :   min(nreads) > fold.nreads * length(pathway)
   #let's take the raw data to manual normalization then SC3
   #manual.norm<-tiss@raw.data
