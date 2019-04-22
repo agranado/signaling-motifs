@@ -18,6 +18,9 @@ load.seurat<-function(){
   tiss = UpdateSeuratObject(tiss)
 
 }
+#for AWS: rstudio
+
+#.libPaths("/home/ubuntu/R/x86_64-pc-linux-gnu-library/3.5")
 
 
 #get the annotated genes (manually curated lists)
@@ -383,9 +386,12 @@ extractPathwayNames <- function(all.natural){
   #split by _ (put by me)
   pathway.names =do.call("cbind",strsplit(mat[4,],"_"))[1,]
   pathway.names[3] = "caspaseActE"
-  pathway.naNes[4] = "caspaseActI"
+  pathway.names[4] = "caspaseActI"
+  return(pathway.names)
 
 }
+
+
 
 
 
