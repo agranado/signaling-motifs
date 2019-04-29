@@ -13,9 +13,15 @@ library(data.table)
 library(doParallel)
 library(tibble)
 
-load.seurat<-function(){
-  load("../tabula-muris/tiss_filteredJan10_2019.rdata")
-  tiss = UpdateSeuratObject(tiss)
+load.seurat<-function(which.file =1){
+
+    if(which.file ==1){
+      load("../tabula-muris/tiss_filteredJan10_2019.rdata")
+      tiss = UpdateSeuratObject(tiss)
+    else if(which.file==2){
+      load("../tabula-muris/tiss_SCTnorm_28Apr.rdata")
+      tiss = tiss.norm; rm(tiss.norm); gc()
+    }
 
 }
 #for AWS: rstudio
@@ -24,7 +30,7 @@ load.seurat<-function(){
 
 
 #get the annotated genes (manually curated lists)
-pathway.genes<-function(pathway ="bmp"){
+pathway.genes<-function(pathway ="bmp",upperName = F){
   bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
   bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7",
               "Bmp8a","Gdf9","Gdf10","Gdf15")
@@ -35,7 +41,7 @@ pathway.genes<-function(pathway ="bmp"){
     "Notch2","Notch3","Notch4","Mfng","Rfng","Lfng")
 
 
-    if(pathway =="bmp"){
+    if(pathway =="bmp_"){
       genes.plot = c(bmp.receptors,bmp.ligands,bmp.smads)
     }else if(length(grep("rand",pathway))>0){
           a = fread( paste( "../pathways/random/",pathway,".csv",sep=""))
@@ -49,6 +55,9 @@ pathway.genes<-function(pathway ="bmp"){
     # }else if(pathway=="notch"){
     #   genes.plot = notch.all
     # }else if(pathway =="")
+
+    if(upperName)
+      genes.plot = toupper(genes.plot)
 
     return (genes.plot)
 }
