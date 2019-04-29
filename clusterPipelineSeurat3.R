@@ -153,7 +153,7 @@ full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elb
 
     #function call
     seurat.pathway = setup.seurat( counts.pathway, norm.pathway, meta.data) #works v3
-
+    pathway.genes_ = rownames(seurat.pathway)
     #######
      seurat.pathway <- ScaleData(object = seurat.pathway, features = rownames(seurat.pathway))
      pcs.compute = length(pathway.genes_) -1
@@ -368,7 +368,9 @@ extractSeuratList<-function(all.random = "", pc.cutoff = 0.5){
     npc = array(0, length(all.random))
     n.clusters = array(0, length(all.random))
     tot.var = array(0, length(all.random))
+    tot.cor = array(0, length(all.random))
     npc.list.nat = list()
+
     for(i in 1:length(all.random)){
         load(all.random[i])
         scaled = seurat.pathway[['RNA']]@scale.data
@@ -378,16 +380,28 @@ extractSeuratList<-function(all.random = "", pc.cutoff = 0.5){
         npc[i] =  length(which(cumsum(pct.var)< pc.cutoff))
         n.clusters[i]  =length(unique(seurat.pathway$seurat_clusters))
         npc.list.nat[[i]] = pct.var
+        #correlation matrix: sum off diag elements
+        A=cor(t(scaled))
+        diag(A) = NA
+        tot.cor[i] = mean(abs(A),na.rm =T)
+
         rm(seurat.pathway)
     }
 
     ngenes =do.call("rbind",lapply(npc.list.nat, length))
-    cluster.data = data.frame(clusters = n.clusters, ngenes = ngenes, npc = npc, tot.var = tot.var)
+    cluster.data = data.frame(clusters = n.clusters, ngenes = ngenes, npc = npc, tot.var = tot.var, tot.cor = tot.cor)
     cluster.data =as_tibble(cluster.data)
 
     return(list(cluster.data, npc.list.nat))
 }
+
+# alternative from results[[2]] big list
 #
+# do.call(rbind,lapply(lapply(results.rand[[2]],cumsum),function(x){length(which(x<0.5))}  ))[,1]
+# cluster.data.rand$npc == npc.rand50
+
+
+
 extractPathwayNames <- function(all.natural){
   #split by diretory
   mat = do.call("cbind",strsplit(all.natural,"/"))
@@ -423,35 +437,68 @@ prepareDataFrames <-function(random.list.file = "datasets/outputAWS/extractedLis
 }
 
 ## use as:   > p = plot.nat.vs.rand(cluster.stats,cluster.data.nat)
-plot.nat.vs.rand <-function(cluster.stats,cluster.data.nat,which.var = "clusters"){
+plot.nat.vs.rand <-function(cluster.stats,cluster.data.nat,which.var = "clusters",axis ="ngenes"){
 
-    if(which.var =="clusters"){
-       p2 = ggplot(data = cluster.data.nat, aes(x = ngenes,y=clusters,label = name)) +
-            geom_point() + scale_color_manual(values=c('#999999'))+ geom_text_repel()+ theme_classic(base_size =18)
+    line.color = "#C0C0C0"
+  if(axis== "ngenes"){
 
-       p2 = p2 + geom_point(data=cluster.stats,aes(ngenes,clusters,colour ="red")) +
-          geom_line(data=cluster.stats,aes(ngenes,clusters,colour ="red")) +
-              geom_errorbar(data=cluster.stats,aes(ymin=clusters-sd.clusters,ymax=clusters+sd.clusters),width=0.2,position=position_dodge(0.05))
+        if(which.var =="clusters"){
+           p2 = ggplot(data = cluster.data.nat, aes(x = ngenes,y=clusters,label = name)) +
+                geom_point() + scale_color_manual(values=c(line.color))+ geom_text_repel()+ theme_classic(base_size =18)
 
-    }else if(which.var =="tot.var"){
-        p2 = ggplot(data = cluster.data.nat, aes(x = ngenes,y=tot.var,label = name)) +
-             geom_point() + scale_color_manual(values=c('#999999'))+ geom_text_repel()+ theme_classic(base_size =18)
+           p2 = p2 + geom_point(data=cluster.stats,aes(ngenes,clusters),colour = line.color) +
+              geom_line(data=cluster.stats,aes(ngenes,clusters),colour = line.color) +
+                  geom_errorbar(data=cluster.stats,aes(ymin=clusters-sd.clusters,ymax=clusters+sd.clusters),width=0.2,position=position_dodge(0.05),colour = line.color)
 
-        p2 =  p2 + geom_point(data=cluster.stats,aes(ngenes,tot.var,colour ="red")) +
-           geom_line(data=cluster.stats,aes(ngenes,tot.var,colour ="red")) +
-               geom_errorbar(data=cluster.stats,aes(ymin=tot.var-sd.tot.var,ymax=tot.var+sd.tot.var),width=0.2,position=position_dodge(0.05))
+        }else if(which.var =="tot.var"){
+            p2 = ggplot(data = cluster.data.nat, aes(x = ngenes,y=tot.var,label = name)) +
+                 geom_point() + scale_color_manual(values=c(line.color))+ geom_text_repel()+ theme_classic(base_size =18)
 
-
-    }else if(which.var=="npc"){
-        p2 = ggplot(data = cluster.data.nat, aes(x = ngenes,y=npc,label = name)) +
-             geom_point() + scale_color_manual(values=c('#999999'))+ geom_text_repel()+ theme_classic(base_size =18)
-
-        p2 = p2 + geom_point(data=cluster.stats,aes(ngenes,npc,colour ="red")) +
-           geom_line(data=cluster.stats,aes(ngenes,npc,colour ="red")) +
-               geom_errorbar(data=cluster.stats,aes(ymin=npc-sd.npc,ymax=npc+sd.npc),width=0.2,position=position_dodge(0.05))
+            p2 =  p2 + geom_point(data=cluster.stats,aes(ngenes,tot.var),colour = line.color) +
+               geom_line(data=cluster.stats,aes(ngenes,tot.var),colour = line.color) +
+                   geom_errorbar(data=cluster.stats,aes(ymin=tot.var-sd.tot.var,ymax=tot.var+sd.tot.var),width=0.2,position=position_dodge(0.05),colour = line.color)
 
 
-    }
+        }else if(which.var=="npc"){
+            p2 = ggplot(data = cluster.data.nat, aes(x = ngenes,y=npc,label = name)) +
+                 geom_point() + scale_color_manual(values=c(line.color))+ geom_text_repel()+ theme_classic(base_size =18)
+
+            p2 = p2 + geom_point(data=cluster.stats,aes(ngenes,npc),,colour = line.color) +
+               geom_line(data=cluster.stats,aes(ngenes,npc),colour = line.color) +
+                   geom_errorbar(data=cluster.stats,aes(ymin=npc-sd.npc,ymax=npc+sd.npc),width=0.2,position=position_dodge(0.05),colour = line.color)
+                 }
+
+
+  }else if(axis == "npc"){
+
+        if(which.var =="clusters"){
+           p2 = ggplot(data = cluster.data.nat, aes(x = npc,y=clusters,label = name)) +
+                geom_point() + scale_color_manual(values=c(line.color))+ geom_text_repel()+ theme_classic(base_size =18)
+
+           p2 = p2 + geom_point(data=cluster.stats,aes(npc,clusters,colour ="red")) +
+              geom_line(data=cluster.stats,aes(npc,clusters,colour ="red")) +
+                  geom_errorbar(data=cluster.stats,aes(ymin=clusters-sd.clusters,ymax=clusters+sd.clusters),width=0.2,position=position_dodge(0.05),colour = line.color)
+
+        }else if(which.var =="tot.var"){
+            p2 = ggplot(data = cluster.data.nat, aes(x = npc ,y=tot.var,label = name)) +
+                 geom_point() + scale_color_manual(values=c(line.color))+ geom_text_repel()+ theme_classic(base_size =18)
+
+            p2 =  p2 + geom_point(data=cluster.stats,aes(npc ,tot.var,colour ="red")) +
+               geom_line(data=cluster.stats,aes(npc ,tot.var,colour ="red")) +
+                   geom_errorbar(data=cluster.stats,aes(ymin=tot.var-sd.tot.var,ymax=tot.var+sd.tot.var),width=0.2,position=position_dodge(0.05),colour = line.color)
+
+
+        }else if(which.var=="npc"){
+            p2 = ggplot(data = cluster.data.nat, aes(x = npc ,y=npc,label = name)) +
+                 geom_point() + scale_color_manual(values=c(line.color))+ geom_text_repel()+ theme_classic(base_size =18)
+
+            p2 = p2 + geom_point(data=cluster.stats,aes(npc ,npc,colour ="red")) +
+               geom_line(data=cluster.stats,aes(npc ,npc,colour ="red")) +
+                   geom_errorbar(data=cluster.stats,aes(ymin=npc-sd.npc,ymax=npc+sd.npc),width=0.2,position=position_dodge(0.05),colour = line.color)
+
+
+        }
+  }
 
  return(p2)
 }

@@ -264,7 +264,7 @@ load.data<-function(pathway="bmp",  which.var = "ontology" ,quant.var = "pct.exp
   return(list(data.to.plot,dat.matrix))
 }
 #get the annotated genes (manually curated lists)
-pathway.genes<-function(pathway ="bmp"){
+pathway.genes<-function(pathway ="bmp",upperNames= F){
   bmp.receptors<-c("Bmpr1a","Bmpr1b","Acvr1","Acvrl1","Acvr1b","Tgfbr1","Acvr1c","Acvr2a","Acvr2b","Bmpr2","Tgfbr2")
   bmp.ligands<-c("Bmp2","Bmp3","Bmp4","Bmp5","Bmp6","Bmp7",
               "Bmp8a","Gdf9","Gdf10","Gdf15")
@@ -304,6 +304,9 @@ pathway.genes<-function(pathway ="bmp"){
     # }else if(pathway=="notch"){
     #   genes.plot = notch.all
     # }else if(pathway =="")
+
+    if(upperNames ==T)
+      genes.plot = toupper(genes.plot)
 
     return (genes.plot)
 }
@@ -662,7 +665,7 @@ heatmap.pipeline2.v3<-function(seurat.obj = c(), which.path ="bmp",which.var="on
   if(!is_empty(seurat.obj))
     tiss = seurat.obj
 
-  genes.plot = pathway.genes(which.path)
+  genes.plot = pathway.genes(which.path,upperNames= T)
   genes.plot = genes.plot[ genes.plot %in% rownames(tiss[["RNA"]]@data)]
 
   data.to.plot<-fetch.data.v3(tiss,genes.plot)
