@@ -18,7 +18,7 @@ load.seurat<-function(which.file =1){
     if(which.file ==1){
       load("../tabula-muris/tiss_filteredJan10_2019.rdata")
       tiss = UpdateSeuratObject(tiss)
-    else if(which.file==2){
+    }else if(which.file==2){
       load("../tabula-muris/tiss_SCTnorm_28Apr.rdata")
       tiss = tiss.norm; rm(tiss.norm); gc()
     }
@@ -63,7 +63,7 @@ pathway.genes<-function(pathway ="bmp",upperName = F){
 }
 #optional:
 
-get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2, min.frac.cells.expressing = 0.005){
+get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2, min.frac.cells.expressing = 0.005,assay = "RNA"){
   # fold.nreads :   min(nreads) > fold.nreads * length(pathway)
   #let's take the raw data to manual normalization then SC3
   #manual.norm<-tiss@raw.data
@@ -114,10 +114,11 @@ setup.seurat<-function(counts.pathway, norm.pathway, meta.data){
     nGene = Matrix::colSums(counts.pathway>0)
 
     seurat.pathway@meta.data$nGene = nGene
+    seurat.pathway@meta.data$nFeature_RNA = nGene
 
     nReads = Matrix::colSums(counts.pathway)
 
-    names(seurat.pathway@meta.data)[3] = "_nReads"
+    colnames(seurat.pathway@meta.data)[colnames(seurat.pathway@meta.data) == 'nReads'] = "_nReads"
 
     seurat.pathway[["RNA"]]@data = norm.pathway
     return(seurat.pathway)

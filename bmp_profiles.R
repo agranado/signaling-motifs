@@ -655,7 +655,10 @@ heatmap.pipeline2<-function(seurat.obj = c(), which.path ="bmp",which.var="ontol
 #as.data.frame(aa)
 #filter.celltypes =row.names(aa)[which(aa>log10(50))]
 
-
+# avg.exp = mean(expm1(x = expression)), # e^x -1)
+# pct.exp = PercentAbove(x = expression, threshold = 0), #any cell with expression >0
+# avg.log.exp = mean(expression)
+# avg.exp.scale
 
 heatmap.pipeline2.v3<-function(seurat.obj = c(), which.path ="bmp",which.var="ontology",quant.var = "avg.exp.scale",
                   scale.which ="none",filename=NA,
@@ -665,7 +668,7 @@ heatmap.pipeline2.v3<-function(seurat.obj = c(), which.path ="bmp",which.var="on
   if(!is_empty(seurat.obj))
     tiss = seurat.obj
 
-  genes.plot = pathway.genes(which.path,upperNames= T)
+  genes.plot = pathway.genes(which.path,upperNames= F)
   genes.plot = genes.plot[ genes.plot %in% rownames(tiss[["RNA"]]@data)]
 
   data.to.plot<-fetch.data.v3(tiss,genes.plot)
@@ -690,13 +693,14 @@ heatmap.pipeline2.v3<-function(seurat.obj = c(), which.path ="bmp",which.var="on
   data.to.plot  = retrieve.genes(data.to.plot,genes.plot,which.var) #bug ID namesBmp4: until here fine
   dat.matrix = cluster.variable(data.to.plot,quant.var)
 
-  p2=pheatmap(dat.matrix,
-          show_rownames=T, cluster_cols=cluster.cols, cluster_rows=T, scale=scale.which,
-          cex=1.3, clustering_distance_rows="euclidean", cex=1,
-          clustering_distance_cols="euclidean", clustering_method="complete",
-          cluster.cols=cluster.cols,filename=filename,cellwidth=cellwidth,cellheight=cellheight,fontsize=fontsize,
-          width=width,height=height)
-
+  # p2=pheatmap(dat.matrix,
+  #         show_rownames=T, cluster_cols=cluster.cols, cluster_rows=T, scale=scale.which,
+  #         cex=1.3, clustering_distance_rows="euclidean", cex=1,
+  #         clustering_distance_cols="euclidean", clustering_method="complete",
+  #         cluster.cols=cluster.cols,filename=filename,cellwidth=cellwidth,cellheight=cellheight,fontsize=fontsize,
+  #         width=width,height=height)
+  #
+  return(dat.matrix)
 
 }
 
