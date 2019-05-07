@@ -223,23 +223,26 @@ plot.features.markers<-function(ipsc.combined) {
 
 }
 
-avg.matrix<-function(seurat.obj,genes.list){
+avg.matrix<-function(seurat.obj,genes.list,by= "ident",upper.case = T){
   cellnames = rownames(seurat.obj@meta.data)
   genenames = rownames(seurat.obj)
 
-  genes.list = genenames[which(genenames %in% toupper(genes.list))]
 
-  data.to.plot = FetchData(seurat.obj, c(toupper(genes.list), "ident"))
+  if(upper.case) genes.list = toupper(genes.list)
+
+  genes.list = genenames[which(genenames %in% genes.list)]
+
+  data.to.plot = FetchData(seurat.obj, c(genes.list, by))
   data.to.plot$cell = rownames(data.to.plot)
   #we added 2 new fields, get the gene names by excluding them (or get the before)...
   genes.plot = colnames(data.to.plot)[1:(length(colnames(data.to.plot))-2)]
 
   data.to.plot %>% gather( key =genes.plot, c(genes.plot), value = expression) -> data.to.plot
 
-   data.to.plot %>% group_by(ident, genes.plot) %>% dplyr::summarize(avg.exp = mean(expression)) %>% spread(genes.plot,avg.exp) -> mean.expr.matrix
-  mean.mat =as.matrix( mean.expr.matrix[,-1]); rownames(mean.mat)<-mean.expr.matrix$ident
+   data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression)) %>% spread(genes.plot,avg.exp) -> mean.expr.matrix
+  mean.mat =as.matrix( mean.expr.matrix[,-1]); rownames(mean.mat)<-unlist(mean.expr.matrix[,by])
 
-  data.to.plot %>% group_by(ident, genes.plot) %>% dplyr::summarize(avg.exp = mean(expression),sd.exp = sd(expression))
+  data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression),sd.exp = sd(expression))
 
   return(mean.mat)
 }

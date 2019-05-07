@@ -140,7 +140,7 @@ all.random = gsub(pattern = "\\.csv$","",all.random)
 #pca.manual = c(9,11,14,13,8)
 
 #for( p in 1:length(all.pathways)){
-full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T){
+full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T,batch.id=""){
     #which.pathway = all.pathways[p]
 
     pathway.genes_ = pathway.genes(which.pathway)
@@ -247,12 +247,12 @@ full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elb
 
     if(  length(grep(".*rand.*",which.pathway))>0 ){
     #Save random pathways in a different directory
-      save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/random/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+      save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/random/", which.pathway, "_clusteredOK_NoVarGenes_", batch.id,".rda",sep=""))
     }else{
-      save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_04082019.rda",sep=""))
+      save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_", batch.id, ".rda",sep=""))
     }
 
-    rm(seurat.pathway)
+    return(seurat.pathway)
 
 
 }

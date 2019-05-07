@@ -668,7 +668,12 @@ heatmap.pipeline2.v3<-function(seurat.obj = c(), which.path ="bmp",which.var="on
   if(!is_empty(seurat.obj))
     tiss = seurat.obj
 
-  genes.plot = pathway.genes(which.path,upperNames= F)
+  if(which.path==""){
+    genes.plot = rownames(seurat.obj)
+  }else{
+    genes.plot = pathway.genes(which.path,upperNames= F)
+  }
+
   genes.plot = genes.plot[ genes.plot %in% rownames(tiss[["RNA"]]@data)]
 
   data.to.plot<-fetch.data.v3(tiss,genes.plot)
