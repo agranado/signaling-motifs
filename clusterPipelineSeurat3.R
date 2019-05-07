@@ -144,7 +144,7 @@ all.random = gsub(pattern = "\\.csv$","",all.random)
 #assay:   accounts for the default assay we want to subset in seurat, by default RNA, but can be SCT depending on normalization
 #batchid: String for naming the output files
 #plot.  : Whether to generate plots
-full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T,batch.id="",assay = 'RNA'){
+full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T,batch.id="",assay = 'RNA',cluster.res = 0.5){
     #which.pathway = all.pathways[p]
 
     pathway.genes_ = pathway.genes(which.pathway)
@@ -202,7 +202,7 @@ full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elb
   #  seurat.pathway <- FindClusters(object = seurat.pathway, reduction.type = "pca", dims.use = 1:pca.used,
   #                        resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T ) #, plot.SNN =T) #DONE
 
-    seurat.pathway = FindClusters(seurat.pathway, resolution = 0.5)
+    seurat.pathway = FindClusters(seurat.pathway, resolution = cluster.res)
     #FindClusters now automatically sets the ident (and erases other idents)
 
   #  seurat.pathway<-SetIdent(seurat.pathway,ident=seurat.pathway@meta.data$res.0.9) #just in case
