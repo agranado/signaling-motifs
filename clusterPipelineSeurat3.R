@@ -63,11 +63,12 @@ pathway.genes<-function(pathway ="bmp",upperName = F){
 }
 #optional:
 
-get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2, min.frac.cells.expressing = 0.005,assay = "RNA"){
+get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.1, fold.nreads = 2,
+                                    min.frac.cells.expressing = 0.005,which.assay = "RNA"){
   # fold.nreads :   min(nreads) > fold.nreads * length(pathway)
   #let's take the raw data to manual normalization then SC3
   #manual.norm<-tiss@raw.data
-  manual.norm<-tiss[["RNA"]]@counts
+  manual.norm<-tiss[[which.assay]]@counts
   #take pathway genes to filter cells:
   manual.norm.pathway<-manual.norm[pathway.genes_,]
   #at least twice the number of genes for nReads
@@ -85,7 +86,7 @@ get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.
   #
 
   #let's find which cells overlap with the seurat.pathway@data (we did take raw.data after all...)
-  manual.norm.pathway=manual.norm.pathway[,which(colnames(manual.norm.pathway) %in% colnames(tiss[["RNA"]]@data))]
+  manual.norm.pathway=manual.norm.pathway[,which(colnames(manual.norm.pathway) %in% colnames(tiss[[which.assay]]@data))]
 
 
   #meta data:
@@ -94,7 +95,7 @@ get.pathway.expression<-function( pathway.genes_,  min.frac.genes.expressed = 0.
 
 
   counts.pathway<-manual.norm.pathway #this was always the raw data
-  norm.pathway<-tiss[["RNA"]]@data [rownames(manual.norm.pathway),colnames(manual.norm.pathway)]
+  norm.pathway<-tiss[[which.assay]]@data [rownames(manual.norm.pathway),colnames(manual.norm.pathway)]
   dim(counts.pathway)
   rm(manual.norm)
   rm(manual.norm.pathway)
@@ -140,14 +141,17 @@ all.random = gsub(pattern = "\\.csv$","",all.random)
 #pca.manual = c(9,11,14,13,8)
 
 #for( p in 1:length(all.pathways)){
-full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T,batch.id=""){
+#assay:   accounts for the default assay we want to subset in seurat, by default RNA, but can be SCT depending on normalization
+#batchid: String for naming the output files
+#plot.  : Whether to generate plots
+full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T,batch.id="",assay = 'RNA'){
     #which.pathway = all.pathways[p]
 
     pathway.genes_ = pathway.genes(which.pathway)
     #check for existing genes in the tiss object before retrieving data
-    pathway.genes_ = pathway.genes_[pathway.genes_ %in% rownames(tiss[["RNA"]]@counts)]
+    pathway.genes_ = pathway.genes_[pathway.genes_ %in% rownames(tiss[[assay]]@counts)]
     #function call
-    res.list = get.pathway.expression( pathway.genes_)
+    res.list = get.pathway.expression( pathway.genes_,which.assay =assay)
     counts.pathway = res.list[[1]]
     norm.pathway = res.list[[2]]
     meta.data = res.list[[3]]
