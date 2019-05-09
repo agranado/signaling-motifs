@@ -12,6 +12,7 @@ library(Seurat)
 library(data.table)
 library(doParallel)
 library(tibble)
+library(ggrepel)
 
 load.seurat<-function(which.file =1){
 
@@ -144,7 +145,8 @@ all.random = gsub(pattern = "\\.csv$","",all.random)
 #assay:   accounts for the default assay we want to subset in seurat, by default RNA, but can be SCT depending on normalization
 #batchid: String for naming the output files
 #plot.  : Whether to generate plots
-full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T,batch.id="",assay = 'RNA',cluster.res = 0.5){
+full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elbow = T,batch.id="",
+                assay = 'RNA',cluster.res = 0.5, randomize = F){
     #which.pathway = all.pathways[p]
 
     pathway.genes_ = pathway.genes(which.pathway)
@@ -366,6 +368,9 @@ do.pca.all.list = function(pathway.list){
 
 #    parallel::stopCluster(cl)
 
+
+
+
 #######
 #######
 # DATA analysis
@@ -434,9 +439,6 @@ extractPathwayNames <- function(all.natural){
 
 
 
-
-all.natural= list.files("./datasets/TabulaMuris_bmp/")
-all.natural= paste( "./datasets/TabulaMuris_bmp/", all.natural,sep="")
 #random
 
 #assuming natural pathways are in the subfolder
