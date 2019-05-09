@@ -255,7 +255,7 @@ full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elb
     #Save random pathways in a different directory
       save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/random/", which.pathway, "_clusteredOK_NoVarGenes_", batch.id,".rda",sep=""))
     }else{
-      save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_NoVarGenes_", batch.id, ".rda",sep=""))
+      save(seurat.pathway,file = paste("../datasets/TabulaMuris_bmp/", which.pathway, "_clusteredOK_may8th_", batch.id, ".rda",sep=""))
     }
 
     return(seurat.pathway)
