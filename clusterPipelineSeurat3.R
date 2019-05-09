@@ -140,7 +140,18 @@ all.random = gsub(pattern = "\\.csv$","",all.random)
 
 #main clustering, plotting , pca ALL pipeline
 #pca.manual = c(9,11,14,13,8)
+randomizeCountMatrix <- function(counts.pathway, norm.pathway){
 
+  for(i in 1:dim(counts.pathway)[1]){
+      shuffled.idx = sample(1:dim(counts.pathway)[2])
+      counts.pathway[i,] = counts.pathway[i,shuffled.idx]
+      norm.pathway[i,]   = norm.pathway[i,shuffled.idx]
+
+  }
+
+  return(list(counts.pathwa, norm.pathway))
+
+}
 #for( p in 1:length(all.pathways)){
 #assay:   accounts for the default assay we want to subset in seurat, by default RNA, but can be SCT depending on normalization
 #batchid: String for naming the output files
