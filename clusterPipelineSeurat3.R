@@ -174,6 +174,7 @@ full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elb
         rand.list = randomizeCountMatrix(counts.pathway,norm.pathway)
         counts.pathway = rand.list[[1]]
         norm.pathway = rand.list[[2]]
+        batch.id = paste(batch.id,"_",paste(as.character(sample(1:10)),collapse = ""),sep="")
     }
 
 
