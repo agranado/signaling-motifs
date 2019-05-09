@@ -374,6 +374,7 @@ extractSeuratList<-function(all.random = "", pc.cutoff = 0.5){
     n.clusters = array(0, length(all.random))
     tot.var = array(0, length(all.random))
     tot.cor = array(0, length(all.random))
+    entropy = array(0, length(all.random))
     npc.list.nat = list()
 
     for(i in 1:length(all.random)){
@@ -386,15 +387,25 @@ extractSeuratList<-function(all.random = "", pc.cutoff = 0.5){
         n.clusters[i]  =length(unique(seurat.pathway$seurat_clusters))
         npc.list.nat[[i]] = pct.var
         #correlation matrix: sum off diag elements
-        A=cor(t(scaled))
+
+
+        #the following measures relate to total variance NOT scaled variance
+        B =cov(t(as.matrix(seurat.pathway[['RNA']]@data)))
+
+        A=cor(t( as.matrix(seurat.pathway[['RNA']]@data )))
         diag(A) = NA
+
         tot.cor[i] = mean(abs(A),na.rm =T)
+
+        #entropy calculation : https://math.stackexchange.com/questions/2029707/entropy-of-the-multivariate-gaussian
+        #and: https://math.stackexchange.com/questions/889425/what-does-determinant-of-covariance-matrix-give
+        entropy[i] = 0.5 * log(det(B)) + 0.5*dim(B)[1] * (1 + log(2*pi))
 
         rm(seurat.pathway)
     }
 
     ngenes =do.call("rbind",lapply(npc.list.nat, length))
-    cluster.data = data.frame(clusters = n.clusters, ngenes = ngenes, npc = npc, tot.var = tot.var, tot.cor = tot.cor)
+    cluster.data = data.frame(clusters = n.clusters, ngenes = ngenes, npc = npc, tot.var = tot.var, tot.cor = tot.cor,entropy =entropy)
     cluster.data =as_tibble(cluster.data)
 
     return(list(cluster.data, npc.list.nat))
@@ -410,11 +421,11 @@ extractSeuratList<-function(all.random = "", pc.cutoff = 0.5){
 extractPathwayNames <- function(all.natural){
   #split by diretory
   mat = do.call("cbind",strsplit(all.natural,"/"))
-  mat[4,]
+  mat[5,]
   #split by _ (put by me)
-  pathway.names =do.call("cbind",strsplit(mat[4,],"_"))[1,]
-  pathway.names[3] = "caspaseActE"
-  pathway.names[4] = "caspaseActI"
+  pathway.names =do.call("cbind",strsplit(mat[5,],"_"))[1,]
+  pathway.names[5] = "caspaseActE"
+  pathway.names[6] = "caspaseActI"
   return(pathway.names)
 
 }
