@@ -169,6 +169,14 @@ full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elb
     norm.pathway = res.list[[2]]
     meta.data = res.list[[3]]
 
+    #this will shuffle the rows of the count matrix, such that any correlation between genes is lost, but the distribution of the gene across the population is conserved
+    if(randomize){
+        rand.list = randomizeCountMatrix(counts.pathway,norm.pathway)
+        counts.pathway = rand.list[[1]]
+        norm.pathway = rand.list[[2]]
+    }
+
+
     #function call
     seurat.pathway = setup.seurat( counts.pathway, norm.pathway, meta.data) #works v3
     pathway.genes_ = rownames(seurat.pathway)
