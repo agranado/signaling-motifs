@@ -149,7 +149,7 @@ randomizeCountMatrix <- function(counts.pathway, norm.pathway){
 
   }
 
-  return(list(counts.pathwa, norm.pathway))
+  return(list(counts.pathway, norm.pathway))
 
 }
 #for( p in 1:length(all.pathways)){
