@@ -212,7 +212,7 @@ full.pipeline<-function(which.pathway,plot.heatmaps = F,plot.tsne = F,  plot.elb
     #seurat.pathway <- RunTSNE(object = seurat.pathway, dims.use = 1:pca.used, seed.use = 10, perplexity=30,
     #                                       check_duplicates = F)
     #v3:
-    seurat.pathway<-RunTSNE(seurat.pathway, dims = 1:pcs.compute, perplexity = 30,check_duplicates = F)
+    #seurat.pathway<-RunTSNE(seurat.pathway, dims = 1:pcs.compute, perplexity = 30,check_duplicates = F)
     seurat.pathway = RunUMAP(seurat.pathway, dims = 1:pcs.compute)
 
     if( plot.tsne ==T){
