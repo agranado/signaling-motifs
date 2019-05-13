@@ -152,6 +152,52 @@ randomizeCountMatrix <- function(counts.pathway, norm.pathway){
   return(list(counts.pathway, norm.pathway))
 
 }
+
+randomized.pipeline<-function(seurat.obj = c(),assay='RNA',cluster.res = 0.5){
+
+  #get the data from the seurat obj
+  norm.pathway = seurat.obj[['RNA']]@data
+  counts.pathway = seurat.obj[['RNA']]@counts
+
+  #keep the same threshold as before for number of genes:
+  min.genes.per.cell = min(Matrix::colSums(norm.pathway>0))
+  #apply randomization of genes across cells
+  rand.list = randomizeCountMatrix(counts.pathway,norm.pathway)
+
+  counts.pathway = rand.list[[1]]
+  norm.pathway = rand.list[[2]]
+  #some cell by chance might get 0 genes expressed, remove them and keep the same min number
+  counts.pathway = counts.pathway[,Matrix::colSums(norm.pathway>0)>min.genes.per.cell]
+  norm.pathway = norm.pathway[,Matrix::colSums(norm.pathway>0)>min.genes.per.cell]
+
+  seurat.obj[[]] %>% filter(cell %in% colnames(norm.pathway)) -> new.meta
+  rownames(new.meta)<-colnames(norm.pathway)
+
+  rm(seurat.obj)
+  seurat.obj = setup.seurat( counts.pathway, norm.pathway, new.meta) #works v3
+
+  pathway.genes_ = rownames(norm.pathway)
+
+  seurat.obj <- ScaleData(object = seurat.obj, features = rownames(seurat.obj))
+  pcs.compute = length(pathway.genes_) -1
+  pcs.compute = 14
+  pcs.compute = round(length(pathway.genes_) * 3/4)
+  seurat.obj <- RunPCA(object = seurat.obj, features =pathway.genes_, do.print = FALSE, npcs = pcs.compute,maxit =10000) #no print
+
+
+  res.used = 0.9
+  seurat.obj = FindNeighbors(seurat.obj, dims = 1:pcs.compute) #for Seurat3
+
+    #  seurat.obj <- FindClusters(object = seurat.obj, reduction.type = "pca", dims.use = 1:pca.used,
+    #                        resolution = res.used, print.output = 0, save.SNN = TRUE,force.recalc=T ) #, plot.SNN =T) #DONE
+
+  seurat.obj = FindClusters(seurat.obj, resolution = cluster.res)
+      #FindClusters now automatically sets the ident (and erases other idents)
+  seurat.obj = RunUMAP(seurat.obj, dims = 1:pcs.compute)
+
+  #now it's randomized
+  return(seurat.obj)
+}
 #for( p in 1:length(all.pathways)){
 #assay:   accounts for the default assay we want to subset in seurat, by default RNA, but can be SCT depending on normalization
 #batchid: String for naming the output files
@@ -387,8 +433,42 @@ do.pca.all.list = function(pathway.list){
 
 
 #    parallel::stopCluster(cl)
+#raw data is the actual single cell data and is needed to estimate the motifProbability (cdf) continous
+#motif is a vector of N_genes elements that has the expression value of each gene in the motif
+motifProbability<-function(raw.data ,motif,err.val = 0.1,binary =F,discrete =F){
+
+  pr.gen = rep(0,length(motif))
+  if(!binary){
+    for(i in 1:length(motif)){
+      val = motif[i]
+      if(val- err.val>0){
+        pr.gen[i] = pemp(val +err.val,as.vector(raw.data[i,]) )-pemp(val -err.val,as.vector(raw.data[i,]) )
+      }else{
+        pr.gen[i] = pemp(val +err.val,as.vector(raw.data[i,]) )
+      }
+
+    }
+  }else{
+    for(i in 1:length(motif)){pr.gen[i] = dbinom(round(motif[i]),size =100,prob =1-pemp(0.5,raw.data[i,]))}
+  }
+
+  return(prod(pr.gen))
+}
 
 
+motifRanDist<-function(seurat.obj,binary =T){
+
+  #here we get information aboyt the clusters in the seurat obj
+  #and calculate the pct of cells expressing for each gene for each cluster
+     mean.mat.rand.bmp = heatmap.pipeline2.v3(seurat.obj,which.path = "",which.var ="id",quant.var ="pct.exp")
+     bmp.motifs.rand =rep(0,dim(mean.mat.rand.bmp)[1]);
+     #here we go through all clusters and calculate their probability
+     for( i in 1:dim(mean.mat.rand.bmp)[1]){
+         bmp.motifs.rand[i]= motifProbability( seurat.obj[['RNA']]@data,
+                                               motif = mean.mat.rand.bmp[i, rownames(seurat.obj[['RNA']]@data) ],err.val = 0.5, binary =binary)
+     }
+     return(bmp.motifs.rand)
+}
 
 
 #######
