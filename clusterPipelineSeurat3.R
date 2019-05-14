@@ -456,16 +456,22 @@ motifProbability<-function(raw.data ,motif,err.val = 0.1,binary =F,discrete =F){
 }
 
 
-motifRanDist<-function(seurat.obj,binary =T){
+motifRanDist<-function(seurat.obj,binary =T,err.val = 0.5){
 
   #here we get information aboyt the clusters in the seurat obj
   #and calculate the pct of cells expressing for each gene for each cluster
-     mean.mat.rand.bmp = heatmap.pipeline2.v3(seurat.obj,which.path = "",which.var ="id",quant.var ="pct.exp")
+    if(binary){
+      quant.var = "pct.exp"
+    }else{
+      quant.var = "avg.log.exp"
+    }
+
+     mean.mat.rand.bmp = heatmap.pipeline2.v3(seurat.obj,which.path = "",which.var ="id",quant.var =quant.var)
      bmp.motifs.rand =rep(0,dim(mean.mat.rand.bmp)[1]);
      #here we go through all clusters and calculate their probability
      for( i in 1:dim(mean.mat.rand.bmp)[1]){
          bmp.motifs.rand[i]= motifProbability( seurat.obj[['RNA']]@data,
-                                               motif = mean.mat.rand.bmp[i, rownames(seurat.obj[['RNA']]@data) ],err.val = 0.5, binary =binary)
+                                               motif = mean.mat.rand.bmp[i, rownames(seurat.obj[['RNA']]@data) ],err.val = err.val, binary =binary)
      }
      return(bmp.motifs.rand)
 }
