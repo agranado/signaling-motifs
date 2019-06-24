@@ -541,10 +541,33 @@ extractPathwayNames <- function(all.natural){
 
 }
 
+#downstream gene expression :
 
 
+zScoreTargetGenes<-function(targets.bmp){
+    z.scores=list()
+    counts.targets = rowSums(as.matrix(tiss.norm[['RNA']][targets.bmp$gene,seurat.pathway[[]]$cell])>0)
+    targets.expressed = names(counts.targets)[counts.targets >1000]
+    for(i in 1:length(targets.expressed)){
+        gene = targets.expressed[i]
+        sox30.cells =rownames(tiss.norm[[]])[as.vector(tiss.norm[['RNA']][gene,])>0]
 
+        seurat.pathway[[]][seurat.pathway[[]]$cell %in% sox30.cells,] %>% select(seurat_clusters) %>% table()-> cluster.gene.counts
 
+        #from the CELLS that were actually considered for clustering, which ones are expressing the gene?
+        total.gene.count = sum(as.matrix(tiss.norm[['RNA']][gene,seurat.pathway[[]]$cell])>0)
+
+        pr.gene= total.gene.count/dim(seurat.pathway)[2]
+
+        mus =round(cluster.sizes * pr.gene)
+
+        sd.aprox = sqrt(round(cluster.sizes *pr.gene*(1-pr.gene)))
+
+        #z.score
+        z.scores[[gene]] = (cluster.gene.counts-mus)/sd.aprox
+    }
+    return(z.scores)
+}
 #random
 
 #assuming natural pathways are in the subfolder
@@ -559,6 +582,8 @@ prepareDataFrames <-function(random.list.file = "datasets/outputAWS/extractedLis
   results.rand = results
   rm(results)
 }
+
+
 
 ## use as:   > p = plot.nat.vs.rand(cluster.stats,cluster.data.nat)
 plot.nat.vs.rand <-function(cluster.stats,cluster.data.nat,which.var = "clusters",axis ="ngenes"){
