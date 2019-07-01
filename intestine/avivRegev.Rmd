@@ -148,3 +148,21 @@ featureListPlot<-function(gene.list,main.title= "Gene expression", fig.cols = 5)
     grid.arrange(grobs=p,ncol = fig.cols, top = main.title)
 
 }
+
+
+
+## Analyse Full-length data set (1.5k cells)
+# Data is already normalized by TPM (not log!)
+atlas_full = read.delim("GSE92332_AtlasFullLength_TPM.txt.gz")
+#take bmp genes
+bmp_recep_fullAtlas = atlas_full[bmp.receptors,]
+bmp_ligands_fullAtlas = atlas_full[bmp.ligands,]
+
+
+
+
+
+
+
+
+##
