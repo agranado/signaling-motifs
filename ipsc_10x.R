@@ -230,7 +230,7 @@ avg.matrix<-function(seurat.obj,genes.list,by= "ident",upper.case = T){
 
   if(upper.case) genes.list = toupper(genes.list)
 
-  genes.list = genenames[which(genenames %in% genes.list)]
+  genes.list = genenames[which(toupper(genenames) %in% toupper(genes.list))]
 
   data.to.plot = FetchData(seurat.obj, c(genes.list, by))
   data.to.plot$cell = rownames(data.to.plot)
