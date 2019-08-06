@@ -135,11 +135,11 @@ ggplot(x, aes(x=tSNE_1, y=tSNE_2, color=clustering)) + geom_point() + scale_colo
 #Plot all notch genes as feature plot:
 notch.all<-c( "Dll1",   "Dll3"   ,"Dll4"   ,"Dtx1",   "Jag1"   ,"Jag2",   "Notch1","Notch2" ,"Notch3", "Notch4" ,"Mfng",   "Rfng",   "Lfng")
 
-featureListPlot<-function(gene.list,main.title= "Gene expression", fig.cols = 5){
+featureListPlot<-function(tpm_matrix = atlas_tpm_norm, gene.list,main.title= "Gene expression", fig.cols = 5){
     p = list()
     for(i in 1:length(gene.list)){
         which.gene= gene.list[i]
-        x$gene =as.vector(t(atlas_tpm_norm[which.gene,]))
+        x$gene =as.vector(t(tpm_matrix[which.gene,]))
         p[[i]] =  ggplot(x, aes(x=tSNE_1, y=tSNE_2)) + geom_point(aes(colour= gene))  + scale_color_gradient(low = "gray69",high = "maroon2")  + ggtitle(gene.list[i])
     }
 
