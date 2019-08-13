@@ -8,12 +8,23 @@ library(Rmagic)
 
 intestine_file = "/Users/alejandrog/Downloads/SRA653146_SRS2874280.sparse-RPKM.RData"
 
+#not in Panglao
+pancreas2.files = c("GSE77980_mouse_islets_rpkm_Xin2016.txt.gz")
+conditions2 = c("Pancreas_islets_Xin")
+
+### FROM panglao
 panglao.path = "/Users/alejandrog/Downloads/"
 pancreas.files = c("SRA784304_SRS3823095.sparse.RData", "SRA784304_SRS3823097.sparse.RData"  ,
                     "SRA784304_SRS3823098.sparse.RData" , "SRA784304_SRS3823096.sparse.RData","SRA784304_SRS3823099.sparse")
 pancreas.files = paste(panglao.path, pancreas.files, sep = "")
 
+
 conditions = c("E15_progenitors_Krentz","E18_progenitors_Krentz" ,"E18_green_Krentz","E15_yellowGreen_Krentz","E18_yellow_Krentz")
+#panglao has some errors in the annotation!
+corrected_conditions = c("E15_red",  "E18_green", "E18_red","E15_yellow_green")
+
+
+
 
 notch.genes = c("Dll1",   "Dll3"   ,"Dll4",   "Dtx1",   "Jag1"  , "Jag2", "Notch1", "Notch2", "Notch3", "Notch4", "Mfng",  "Rfng"  , "Lfng",   "Dlk1",   "Dlk2")
 bmp.receptors<-c( "Bmpr1a" ,"Bmpr1b" ,"Acvr1"  ,"Acvrl1" ,"Acvr1b" ,"Tgfbr1" ,"Acvr1c" ,"Acvr2a", "Acvr2b", "Bmpr2" ,"Tgfbr2")
@@ -63,6 +74,13 @@ load.PanglaoDB<-function(input_file = "", min_colSums = 3, max_colSums = 6, max_
   return(sm2_filtered)
 }
 #CPU time, Mac 8min single core for pancreas.files[1]
+
+load.additionalSamples <- function(sampleID){
+  if(sampleID =="Xin"){
+    Xin = read.table("Downloads/pancreas2/GSE77980_mouse_islets_rpkm_Xin2016.txt.gz",header = T)
+  }
+
+}
 #
 normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
 
@@ -102,29 +120,43 @@ normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
 
 }
 
-plotPathwayMagic<-function(sce_magic_data= c() , gene.list = bmp.receptors, cut_k = 10){
+plotPathwayMagic<-function(sce_magic_data= c() , gene.list = bmp.receptors, cut_k = 10, main_title = ""){
 
     gene.names = row.names(sce_magic_data)
-    p2 =pheatmap(sce_magic_data[which(gene.names %in% gene.list),] ,cluster_rows = F,cutree_cols = cut_k,show_colnames = F)
+    p2 =pheatmap(sce_magic_data[which(gene.names %in% gene.list),] ,cluster_rows = F,cutree_cols = cut_k,
+            show_colnames = F,main = main_title)
 
     return(p2[[4]])
 
 }
 
 #we can directly download the data from paper's website to compare
-
-norm_matrices_data = grep("normalized",list.files("Downloads/Krentz_2019/"),value = T)
+# There are some errors in the annotation of PanglaoDB for this particular dataset
+# WE will load the raw data from the paper and compare with Panlao to correct for errors
+# There is also a table of number of cells per sample in the paper, we want to use that to compare to
+krentz_paper_files=grep("normalized",list.files("/Users/alejandrog/Downloads/Krentz_2019/"),value = T)
+krentz_paper_files = paste("Downloads/",krentz_paper_files,sep ="")
 
 loadFromPaper<-function(file_name = "Downloads/Krentz_2019/GSM3402516_E18_green_normalized_counts_matrix.txt.gz",res=list()){
 
   aa<-read.table(file_name,row.names = 1,header = T)
   aa<-t(aa)
+  #this has metadata
   aa_data = aa[5:dim(aa)[1],]
+  ncell = ncol(aa_data)
+  ngene = nrow(aa_data)
   aa_data<- matrix(mapply(aa_data, FUN=as.numeric),  ncol=ncell, nrow=ngene)
   row.names(aa_data)<-row.names(aa)[-c(1:4)]
   colnames(aa_data) = colnames(aa)
 
-  colnames_simple = str_split(str_split(colnames(aa_data),"_",simplify=T )[,3], "-", simplify=T)[,1]
+  # In this file, the names of cells have two underscores, and therefore the index we want is 4 instead of 3
+  if(grep("E15_yellow_green",file_name)) barcode_index = 4 else barcode_index = 3
+
+  colnames_simple = str_split(str_split(colnames(aa_data),"_",simplify=T )[,barcode_index], "-", simplify=T)[,1]
+
+  colnames(aa_data)<-colnames_simple
+
+  return(aa_data)
 }
 
 
