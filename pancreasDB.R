@@ -35,17 +35,27 @@ bmp.receptors<-c( "Bmpr1a" ,"Bmpr1b" ,"Acvr1"  ,"Acvrl1" ,"Acvr1b" ,"Tgfbr1" ,"A
 #
 
 load.PanglaoDB<-function(input_file = "", min_colSums = 3, max_colSums = 6, min.percent = 0.05, max_rowSums = 6,
-                            k = 10, data_type = "10x", plot.all = T){
+                            k = 10, data_type = "10x", plot.all = T, user_matrix = F,user_defined_matrix = c()){
 
-  load(input_file)
 
-  if(data_type =="10x"){
-    #sm2 refers to RPKM values reported in PanglaoDB from SmartSeq data
-    # 10x is not normalized in the same way and so, we only get sm
-    sm2 = sm
-    rm(sm)
+  #Normally we want to use this function to load UMI / RPKM data from PanglaoDB
+  #However, the function also performs basic filtering, so we can use it with other source data
+  if(!user_matrix){
+    #If this is a PanglaoDB matrix
+    #LOAD the file
+      load(input_file)
+
+      if(data_type =="10x"){
+        #sm2 refers to RPKM values reported in PanglaoDB from SmartSeq data
+        # 10x is not normalized in the same way and so, we only get sm
+        sm2 = sm
+        rm(sm)
+      }
+  }else{
+    #User provided an input matrix:
+    sm2 = user_defined_matrix
+
   }
-
   #minimum percentage of cells in which a gene should be expresed
 
   #Manually Filtering cells
@@ -79,13 +89,6 @@ load.PanglaoDB<-function(input_file = "", min_colSums = 3, max_colSums = 6, min.
 }
 #CPU time, Mac 8min single core for pancreas.files[1]
 
-load.additionalSamples <- function(sampleID){
-  if(sampleID =="Xin"){
-    Xin = read.table("Downloads/pancreas2/GSE77980_mouse_islets_rpkm_Xin2016.txt.gz",header = T)
-  }
-
-}
-#
 normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
 
   # SCRAN normalization
@@ -94,7 +97,8 @@ normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
   clusters <- quickCluster(sce, min.size=100) # TAKES a long time
   sce <- computeSumFactors(sce, cluster=clusters)
   # Now we can normalize the data
-  sce<-normalize(sce)
+  # Compute normalised expression values from count data in a SingleCellExperiment object, using the size factors stored in the object.
+  sce<-scater::normalize(sce)
 
   #let's convert to Seurat:
   sce.seurat <- as.Seurat(sce)
@@ -268,12 +272,44 @@ loadByrnesFigShare<-function(file_name="Downloads/Byrnes2018/E14_allcells_seur_o
 }
 
 
+# Xin dataset:
+
+load.additionalSamples <- function(sampleID){
+  if(sampleID =="Xin"){
+    Xin = read.table("Downloads/pancreas2/GSE77980_mouse_islets_rpkm_Xin2016.txt.gz",header = T)
+  }
+
+}
+#
 
 
+# Intestine
+# Load Aviv Regev intestine dataset
 
+# We can make a function for loading / filtering ANY UMI matrix
+  #Manually Filtering cells
+filterData<-function(sm2= c(),plot.all = T,min_colSums = 3, max_colSums = 6, min.percent = 0.05, max_rowSums = 6){
 
+  if(plot.all){
+    x11()
+    par(mfrow = c(2,2))
+    #make histograms to establish threshold
+    hist(log10(Matrix::colSums(sm2>0)),main = "N expressed genes per cell")
+    hist(log10(Matrix::colSums(sm2)), main = "Reads per cell")
+  }
+  #min 10^3 genes
+  #max 10^6 UMIs (10x data)
+  sm2_filtered=sm2[,log10(Matrix::colSums(sm2>0)) > min_colSums & log10(Matrix::colSums(sm2)) < max_colSums  ]
+  #filter genes that are expressed in less than 5% of cells in the dataset
+  sm2_filtered = sm2_filtered[Matrix::rowSums(sm2_filtered>0) >round(dim(sm2_filtered)[2] * min.percent)  & log10(Matrix::rowSums(sm2_filtered)) <max_rowSums,]
 
+  if(plot.all){
+    hist(log10(Matrix::colSums(sm2_filtered>0)),main = "N expressed genes per cell (filtered)")
+    hist(log10(Matrix::colSums(sm2_filtered)), main = "Reads per cell (filtered)")
+  }
 
+  return(sm2_filtered)
+}
 
 
 

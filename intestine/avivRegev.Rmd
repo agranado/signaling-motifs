@@ -24,6 +24,7 @@ library(cowplot)
 library(sva)
 library(igraph)
 library(cccd)
+library(RColorBrewer)
 
 ### Load all the required functions for this analysis
 source("Fxns.R")
