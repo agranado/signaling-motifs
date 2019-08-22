@@ -89,6 +89,29 @@ load.PanglaoDB<-function(input_file = "", min_colSums = 3, max_colSums = 6, min.
 }
 #CPU time, Mac 8min single core for pancreas.files[1]
 
+normalizeSCRAN<-function(sm2_filtered){
+  # SCRAN normalization
+  # We need a SCE object so we will convert our matrix to that,
+  # For MAGIC, we need a UMI matrix so we will convert to Seurat so
+  # we can extract the count matrix from there (not elegant)
+
+  # The counts slot can be filled with RPKM values, since it is used for dropout correction
+  sce<-SingleCellExperiment(list(counts = sm2_filtered))
+  clusters <- quickCluster(sce, min.size=100) # TAKES a long time
+  sce <- computeSumFactors(sce, cluster=clusters)
+  # Now we can normalize the data
+  # Compute normalised expression values from count data in a SingleCellExperiment object, using the size factors stored in the object.
+  sce<-scater::normalize(sce)
+
+  #let's convert to Seurat:
+  sce.seurat <- as.Seurat(sce)
+
+  norm_count_matrix = as.matrix(sce.seurat[['RNA']]@data )
+
+  return(norm_count_matrix)
+
+}
+
 normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
 
   # SCRAN normalization
@@ -114,7 +137,7 @@ normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
     p1 = pheatmap(log2(1+subset_full),cluster_rows = F,show_colnames = F)
   }
   #MAGIC imputation
-  sce_magic  = magic(t(as.matrix(sce.seurat[['RNA']]@data )),k=k_magic,n.jobs =-1)
+  sce_magic  = Rmagic::magic(t(as.matrix(sce.seurat[['RNA']]@data )),k=k_magic,n.jobs =-1)
   sce_magic_data = t(sce_magic$result)
   if(plot.all){
     p2 =pheatmap(sce_magic_data[which(gene.names %in% bmp.receptors),] ,cluster_rows = F,cutree_cols = 10,show_colnames = F)

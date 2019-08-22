@@ -55,6 +55,7 @@ batch.labels = factor(unlist(lapply(colnames(atlas_umis), get_field, 1,"_")))
 table(batch.labels)
 atlas_tpm = data.frame(log2(1+tpm(atlas_umis)))
 
+# This part is just exploratory not necessary 
 ## take mean tpm across batches to show batch effect
 batch_mean_tpm = group.means(counts = atlas_tpm, groups = batch.labels)
 x = batch_mean_tpm[, 1]
