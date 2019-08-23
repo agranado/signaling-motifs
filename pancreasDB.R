@@ -179,7 +179,7 @@ plotPathwayMagic<-function(sce_magic_data= c() , gene.list = bmp.receptors,
 
     #No annotations
     }else{
-      p2 =pheatmap(sce_magic_data[which(gene.names %in% gene.list),] ,cluster_rows = F,cutree_cols = cut_k,
+      p2 =pheatmap(sce_magic_data[sort(gene.names[which(gene.names %in% gene.list)]),] ,cluster_rows = F,cutree_cols = cut_k,
             show_colnames = F,main = main_title)
     }
 
