@@ -284,6 +284,7 @@ loadByrnesFigShare<-function(file_name="Downloads/Byrnes2018/E14_allcells_seur_o
 
 
   # Annotation of byrnes data object:
+  # This line is very specific for this data set : assigned_ident
   byrnes_E14_ann = data.frame(cell_type = byrnes_E14_meta$assigned_ident[ which(row.names(byrnes_E14_meta) %in% colnames(byrnes_E14_raw)) ]  )
 
 
