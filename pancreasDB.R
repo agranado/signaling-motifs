@@ -5,6 +5,8 @@ library(scran)
 library(pheatmap)
 library(Seurat)
 library(Rmagic)
+library(RColorBrewer)
+library(sva)
 
 intestine_file = "/Users/alejandrog/Downloads/SRA653146_SRS2874280.sparse-RPKM.RData"
 
