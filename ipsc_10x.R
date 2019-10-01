@@ -206,6 +206,16 @@ x11()
 #split by sample
 DimPlot(object = ipsc.combined , reduction = "umap", split.by = "orig.ident")
 
+
+
+
+# # # # #
+
+
+
+# # # # #
+
+
 # # # # # #
  # # # # # #
 # read markers and make plots
