@@ -57,7 +57,22 @@ if(mode ==1){
           #ipsc.combined <- ScaleData(object = ipsc.combined, verbose = FALSE, vars.to.regress ="percent.mito")
           #no regression :
           ipsc.combined <- ScaleData(object = ipsc.combined, verbose = FALSE ,vars.to.regress =c("nCount_RNA","percent.mito"))
-          ipsc.combined <- RunPCA(object = ipsc.combined, npcs = 100, verbose = FALSE)
+          ipsc.combined <- RunPCA(object = ipsc.combined, npcs = 50, verbose = FALSE)
+
+
+          # # # # # # # # # # Oct 2019
+          # Seurat includes a list of genes for cell cycle markers that should not be too different between tissues
+          # Correction of cell cycle genes
+          s.genes <- cc.genes$s.genes
+          g2m.genes <- cc.genes$g2m.genes
+          # Assign a cell-cycle score to each cell based on expression of different markers
+          ipsc.combined <- CellCycleScoring(ipsc.combined, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+          # Regress out the cell cycle score
+          ipsc.combined <- ScaleData(ipsc.combined, vars.to.regress = c("S.Score", "G2M.Score","percent.mito"), features = rownames(ipsc.combined))
+          # Run the PCA again
+          ipsc.combined <- RunPCA(object = ipsc.combined, npcs = 50, verbose = FALSE)
+
+          # # # # # # #
 
           #
           x11()
@@ -227,9 +242,18 @@ plot.features.markers<-function(ipsc.combined) {
   #Plot all features
   for(i in 1:length(celltypes) ){
     markers %>% filter(celltype==celltypes[i]) -> aa ; aa$gene
-    FeaturePlot( ipsc.combined, features = aa$gene)
+    FeaturePlot( ipsc.combined, features = aa$gene,ncol = 3)
     ggsave(filename=paste("plots/",celltypes[i],"_test.pdf",sep=""),width  = 12, height = 12)
   }
+
+}
+
+find.all.TFs <- function(clusterN=0, top20 = data.frame()) {
+
+  TFlist = read.csv("/home/agranado/Downloads/1-s2.0-S0092867418301065-mmc2.csv",sep = "\t")
+  AllTFs = TFlist %>% filter(IS.TF=="Yes") %>% select(Name)
+  top20 %>% filter(cluster==clusterN) %>% select(gene) -> query
+  query$gene[query$gene %in% AllTFs$Name]
 
 }
 
