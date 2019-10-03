@@ -309,6 +309,75 @@ load.additionalSamples <- function(sampleID){
 #
 
 
+
+
+
+# # # # # PANCREATIC ISLETS SEURAT INTEGRATION CELL PAPER
+# # # # # Oct 1st 2019
+# # # # #
+# Download data from:  https://www.dropbox.com/s/1zxbn92y5du9pu0/pancreas_v3_files.tar.gz?dl=1
+
+# ALSO Tutorial on SCT + data integration
+
+
+
+library(Seurat)
+
+root.folder = "/home/agranado/"
+# needed for SCT integration to run (otherwise it will crash )
+options(future.globals.maxSize = 4000 * 1024^2)
+
+
+# all cells (4 technologies/papers)
+# meta data includes a tech field that we can use to separate them
+pancreas.data <- readRDS(file = paste(root.folder,"Downloads/pancreas_v3_files/pancreas_expression_matrix.rds",sep=""))
+metadata <- readRDS(file = paste(root.folder,"Downloads/pancreas_v3_files/pancreas_metadata.rds",sep=""))
+
+pancreas <- CreateSeuratObject(pancreas.data, meta.data = metadata)
+pancreas.list <- SplitObject(pancreas, split.by = "tech")
+
+
+# SCT transform normalization for each dataset prior to integration
+for (i in 1:length(pancreas.list)) {
+    pancreas.list[[i]] <- SCTransform(pancreas.list[[i]], verbose = FALSE)
+} # gives some warnings regarding non-integer values in poison function
+
+# requires development version of Seurat (installed in ubuntu machine)
+# devtools::install_github(repo = "satijalab/seurat", ref = "develop")
+
+pancreas.features <- SelectIntegrationFeatures(object.list = pancreas.list, nfeatures = 3000)
+pancreas.list <- PrepSCTIntegration(object.list = pancreas.list, anchor.features = pancreas.features,
+    verbose = FALSE)
+
+
+
+
+pancreas.anchors <- FindIntegrationAnchors(object.list = pancreas.list, normalization.method = "SCT",
+    anchor.features = pancreas.features, verbose = FALSE)
+pancreas.integrated <- IntegrateData(anchorset = pancreas.anchors, normalization.method = "SCT",
+    verbose = FALSE)
+
+# Clustering and visualization
+# We see that cells coming from different technologies are now clusterd by cell type rather than technology (source)
+    pancreas.integrated <- RunPCA(pancreas.integrated, verbose = FALSE)
+    pancreas.integrated <- RunUMAP(pancreas.integrated, dims = 1:30)
+    plots <- DimPlot(pancreas.integrated, group.by = c("tech", "celltype"), combine = FALSE)
+    plots <- lapply(X = plots, FUN = function(x) x + theme(legend.position = "top") + guides(color = guide_legend(nrow = 3,
+        byrow = TRUE, override.aes = list(size = 3))))
+    CombinePlots(plots)
+
+
+# DEfault assay is still SCT
+  DefaultAssay(pancreas.integrated) <- "SCT"
+  x11()
+  FeaturePlot(pancreas.integrated,features = toupper(bmp.receptors))
+
+#  NEXT step MAGIC
+
+
+
+
+
 # Intestine
 # Load Aviv Regev intestine dataset
 
@@ -340,9 +409,7 @@ filterData<-function(sm2= c(),plot.all = T,min_colSums = 3, max_colSums = 6, min
 
 
 
-
-
-
+####
 
 old.code<-function(){
       load("Downloads/SRA653146_SRS2874280.sparse-RPKM.RData")
