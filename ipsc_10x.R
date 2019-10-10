@@ -20,9 +20,13 @@ filterRawCounts<-function(rawdata, min.reads = 2000, min.cells.frac = 0.005, qua
     hist(percent.mito)
 
 
-    data.diff <- CreateSeuratObject(counts = rawdata,project = projectid,min.features = 200,min.cells = 20,
-                  meta.data = as.data.frame(percent.mito))
+    data.diff <- CreateSeuratObject(counts = rawdata,project = projectid,min.features = 200,min.cells = 20)
 
+    data.diff <- AddMetaData(
+                object = data.diff,
+                metadata = as.data.frame(percent.mito),
+                col.name = 'percent.mito'
+              )
 
     return(data.diff)
 }
@@ -50,14 +54,14 @@ if(mode ==1){
           ipsc.combined <- IntegrateData(anchorset =ipsc.anchors, dims = 1:50)
 
 
-
-          # Run the standard workflow for visualization and clustering
-          #with regression
-
-          #ipsc.combined <- ScaleData(object = ipsc.combined, verbose = FALSE, vars.to.regress ="percent.mito")
-          #no regression :
-          ipsc.combined <- ScaleData(object = ipsc.combined, verbose = FALSE ,vars.to.regress =c("nCount_RNA","percent.mito"))
-          ipsc.combined <- RunPCA(object = ipsc.combined, npcs = 50, verbose = FALSE)
+          #
+          # # Run the standard workflow for visualization and clustering
+          # #with regression
+          #
+          # #ipsc.combined <- ScaleData(object = ipsc.combined, verbose = FALSE, vars.to.regress ="percent.mito")
+          # #no regression :
+          # ipsc.combined <- ScaleData(object = ipsc.combined, verbose = FALSE ,vars.to.regress =c("nCount_RNA","percent.mito"))
+          # ipsc.combined <- RunPCA(object = ipsc.combined, npcs = 50, verbose = FALSE)
 
 
           # # # # # # # # # # Oct 2019
@@ -99,6 +103,13 @@ if(mode ==1){
           x11()
           #split by sample
           DimPlot(object = ipsc.combined , reduction = "umap", split.by = "orig.ident")
+
+
+          # Find Markers:
+          ipsc.markers <- FindAllMarkers(ipsc.combined, only.pos = TRUE, min.pct = 0.15, logfc.threshold = 0.25)
+          top10 <-ipsc.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+          top20 <-ipsc.markers %>% group_by(cluster) %>% top_n(n = 20, wt = avg_logFC)
+          x11();DoHeatmap(ipsc.combined, features = top20$gene) + NoLegend()
 
 }
 

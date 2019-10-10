@@ -330,6 +330,7 @@ options(future.globals.maxSize = 4000 * 1024^2)
 
 # all cells (4 technologies/papers)
 # meta data includes a tech field that we can use to separate them
+# Also available at Google Drive CaltechProject/rna-seq/2019_postLM/RawData/Pancreas_ButlerCell2019
 pancreas.data <- readRDS(file = paste(root.folder,"Downloads/pancreas_v3_files/pancreas_expression_matrix.rds",sep=""))
 metadata <- readRDS(file = paste(root.folder,"Downloads/pancreas_v3_files/pancreas_metadata.rds",sep=""))
 
