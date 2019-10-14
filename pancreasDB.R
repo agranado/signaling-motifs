@@ -189,6 +189,20 @@ plotPathwayMagic<-function(sce_magic_data= c() , gene.list = bmp.receptors,
 }
 
 
+# oct 11
+# plot distributions of all genes of interest with summary statistics
+plotGeneDistribution<-function(magic_data, list.genes =bmp.receptors){
+
+  #get the indexes for the genes that are actually present in the matrix
+  which.genes = which(row.names(magic_data) %in% bmp.receptors)
+  par(mfrow = c(4, length(which.genes) %/% 4) + 1)
+  min_x = min(magic_data[which.genes,])
+  max_x = max(magic_data[which.genes,])
+
+  for(i in 1:length(which.genes))
+      hist(magic_data[which.genes[i],],main = row.names(magic_data)[which.genes[i]],xlim = c(min_x,max_x))
+
+}
 
 # # # # # # # # # # # # # # # # #
 # Krentz 2018 Stem Cell Reports
@@ -202,7 +216,7 @@ plotPathwayMagic<-function(sce_magic_data= c() , gene.list = bmp.receptors,
 # WE will load the raw data from the paper and compare with Panlao to correct for errors
 # There is also a table of number of cells per sample in the paper, we want to use that to compare to
 krentz_paper_files=grep("normalized",list.files("/Users/alejandrog/Downloads/Krentz_2019/"),value = T)
-krentz_paper_files = paste("Downloads/",krentz_paper_files,sep ="")
+krentz_paper_files = paste("/Users/alejandrog/Downloads/Krentz_2019/",krentz_paper_files,sep ="")
 #Returns a list of lists: [[1]] is a list of magic_matrices [[2]] is a list of the associated metadata
 loadFromPaper<-function(krentz_paper_files = krentz_paper_files,res=list()){
 
@@ -263,7 +277,7 @@ loadMetaKrentz<-function(file_name = krentz_paper_files[1]){
 }
 
 
-# # # # # # # # # # # # # # # # #
+  # # # # # # # # # # # # # # # # #
 # # # # # # # # # # # # # # # # #
 # Byrnes 2018 Nat Comm
 # Whole Pancreas 10x sc RNA sequ
