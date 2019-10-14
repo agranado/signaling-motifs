@@ -92,25 +92,25 @@ load.PanglaoDB<-function(input_file = "", min_colSums = 3, max_colSums = 6, min.
 #CPU time, Mac 8min single core for pancreas.files[1]
 
 normalizeSCRAN<-function(sm2_filtered){
-  # SCRAN normalization
-  # We need a SCE object so we will convert our matrix to that,
-  # For MAGIC, we need a UMI matrix so we will convert to Seurat so
-  # we can extract the count matrix from there (not elegant)
+    # SCRAN normalization
+    # We need a SCE object so we will convert our matrix to that,
+    # For MAGIC, we need a UMI matrix so we will convert to Seurat so
+    # we can extract the count matrix from there (not elegant)
 
-  # The counts slot can be filled with RPKM values, since it is used for dropout correction
-  sce<-SingleCellExperiment(list(counts = sm2_filtered))
-  clusters <- quickCluster(sce, min.size=100) # TAKES a long time
-  sce <- computeSumFactors(sce, cluster=clusters)
-  # Now we can normalize the data
-  # Compute normalised expression values from count data in a SingleCellExperiment object, using the size factors stored in the object.
-  sce<-scater::normalize(sce)
+    # The counts slot can be filled with RPKM values, since it is used for dropout correction
+    sce<-SingleCellExperiment(list(counts = sm2_filtered))
+    clusters <- quickCluster(sce, min.size=100) # TAKES a long time
+    sce <- computeSumFactors(sce, cluster=clusters)
+    # Now we can normalize the data
+    # Compute normalised expression values from count data in a SingleCellExperiment object, using the size factors stored in the object.
+    sce<-scater::normalize(sce)
 
-  #let's convert to Seurat:
-  sce.seurat <- as.Seurat(sce)
+    #let's convert to Seurat:
+    sce.seurat <- as.Seurat(sce)
 
-  norm_count_matrix = as.matrix(sce.seurat[['RNA']]@data )
+    norm_count_matrix = as.matrix(sce.seurat[['RNA']]@data )
 
-  return(norm_count_matrix)
+    return(norm_count_matrix)
 
 }
 
@@ -344,6 +344,7 @@ options(future.globals.maxSize = 4000 * 1024^2)
 
 # all cells (4 technologies/papers)
 # meta data includes a tech field that we can use to separate them
+# Also available at Google Drive CaltechProject/rna-seq/2019_postLM/RawData/Pancreas_ButlerCell2019
 pancreas.data <- readRDS(file = paste(root.folder,"Downloads/pancreas_v3_files/pancreas_expression_matrix.rds",sep=""))
 metadata <- readRDS(file = paste(root.folder,"Downloads/pancreas_v3_files/pancreas_metadata.rds",sep=""))
 
