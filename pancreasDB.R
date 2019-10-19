@@ -154,7 +154,7 @@ normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
 }
 
 plotPathwayMagic<-function(sce_magic_data= c() , gene.list = bmp.receptors,
-                      cut_k = 10, main_title = "",ann_df = c()){
+                      cut_k = 10, main_title = "",ann_df = c(),filter_negative = F){
 
     #22 distinct colors
     distinct_colors = c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
@@ -164,6 +164,8 @@ plotPathwayMagic<-function(sce_magic_data= c() , gene.list = bmp.receptors,
 
     gene.names = row.names(sce_magic_data)
 
+    if(filter_negative)
+      sce_magic_data[sce_magic_data<0] = 0
     #with annotation for colors and cell types
     # List of color must match a given cell type
     if(length(ann_df)>0){
@@ -191,7 +193,7 @@ plotPathwayMagic<-function(sce_magic_data= c() , gene.list = bmp.receptors,
 
 # oct 11
 # plot distributions of all genes of interest with summary statistics
-plotGeneDistribution<-function(magic_data, list.genes =bmp.receptors){
+plotGeneDistribution<-function(magic_data, list.genes =bmp.receptors,nbreaks = 50){
 
   #get the indexes for the genes that are actually present in the matrix
   which.genes = which(row.names(magic_data) %in% bmp.receptors)
@@ -200,7 +202,7 @@ plotGeneDistribution<-function(magic_data, list.genes =bmp.receptors){
   max_x = max(magic_data[which.genes,])
 
   for(i in 1:length(which.genes))
-      hist(magic_data[which.genes[i],],main = row.names(magic_data)[which.genes[i]],xlim = c(min_x,max_x))
+      hist(magic_data[which.genes[i],],main = row.names(magic_data)[which.genes[i]],xlim = c(min_x,max_x),breaks = nbreaks)
 
 }
 
