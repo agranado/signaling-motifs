@@ -33,7 +33,7 @@ batchCorrection_n_Imputation<-function( this_tissue = "Pancreas",k_magic = 4, np
 
 
 gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T){
-
+  # from library mixtools
   expr = sce.seurat[['RNA']]@data[gene,]
   mixmdl <- normalmixEM(expr,k = 4)
   df = data.frame(x = mixmdl$x)
@@ -109,4 +109,21 @@ plotMotifBarPlot<-function(bmp_quant){
 
   p = ggplot(motif_values, aes(x = genes,y=value)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, hjust = 1))
   return(p)
+}
+
+
+fitSingleGene<-function(gene,plot.all = F){
+
+    x = sce.seurat[['RNA']]@data[gene,];
+    fit =Mclust(x)
+
+    if(plot.all){
+      x11();
+      par(mfrow=c(3,1));
+      hist(x,breaks = 100)
+      plot(fit,what="density");plot(fit,what="classification");
+
+    }else{
+      return(fit)
+    }
 }
