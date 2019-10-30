@@ -32,9 +32,16 @@ batchCorrection_n_Imputation<-function( this_tissue = "Pancreas",k_magic = 4, np
 }
 
 
-gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T){
+gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c()){
   # from library mixtools
-  expr = sce.seurat[['RNA']]@data[gene,]
+
+  if(length(expr_matrix)==0)
+    expr = sce.seurat[['RNA']]@data[gene,]
+  }else{
+    expr = expr_matrix[gene,]
+  }
+
+
   mixmdl <- normalmixEM(expr,k = 4)
   df = data.frame(x = mixmdl$x)
 
@@ -92,9 +99,14 @@ gaussianFitAssignCluster<-function(mixmdl,  rank_labels = c("0","L","M","H")){
 
 profileDictionary<-function(profiles){
 
+  # Take a list of profile
+  # Compute the frequnecy of each one and make a table of unique profiles
+  # Sort the table from most frequent to least frequent
   profile_ranks = rep(0,length(profiles))
   table(profiles) %>% sort(decreasing = T)  ->sorted_profiles
 
+  # For each profile, we will find it's rank in the table and assign it to an array
+  # Such that we have an array with the same dimension and the rank as its value (i.e, there are repeated values)
   for(i in 1:length(sorted_profiles)){
 
     profile_ranks[which(profiles == names(sorted_profiles)[i])] = i
@@ -112,10 +124,15 @@ plotMotifBarPlot<-function(bmp_quant){
 }
 
 
-fitSingleGene<-function(gene,plot.all = F){
+fitSingleGene<-function(gene,plot.all = F,expr_matrix = c(),G= 1:9){
 
+  if(length(expr_matrix)==0){
     x = sce.seurat[['RNA']]@data[gene,];
-    fit =Mclust(x)
+  }else{
+    x = expr_matrix[gene,]
+  }
+
+    fit =Mclust(x,G = G)
 
     if(plot.all){
       x11();
@@ -126,4 +143,37 @@ fitSingleGene<-function(gene,plot.all = F){
     }else{
       return(fit)
     }
+}
+
+## statistics
+
+
+#plotMotifDist
+#this_tissue is the name of the variable
+# class is the type of variable:
+#cell_ontology_class for cell types
+#tissue for tissues
+#seurat_clusters for clusters (based on transcriptome)
+plotMotifDist<-function(this_tissue,class = "tissue",binwidth = 3){
+  #this_tissue = "Brain_Non-Myeloid";
+
+
+
+  if(class=="tissue"){
+    tabula %>% group_by(tissue,bmp) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(tissue,desc(count)) -> motifs_by_tissue
+    motifs_by_tissue %>% filter(tissue ==this_tissue) %>% arrange(desc(freq), bmp) ->df
+  }else if(class=="cell_ontology_class"){
+    tabula %>% group_by(cell_ontology_class,bmp) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(cell_ontology_class,desc(count)) -> motifs_by_tissue
+    motifs_by_tissue %>% filter(cell_ontology_class ==this_tissue) %>% arrange(desc(freq), bmp) ->df
+  }else if(class =="seurat_clusters"){
+    tabula %>% group_by(seurat_clusters,bmp) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_by_tissue
+    motifs_by_tissue %>% filter(seurat_clusters ==this_tissue) %>% arrange(desc(freq), bmp) ->df
+  }
+
+  p =ggplot(df, aes(x = freq*100, y = ..density..)) +
+      geom_histogram(,position = "identity",binwidth = binwidth) + geom_density() +
+      ggtitle(this_tissue) + theme(text = element_text(size=20))  + xlab(" %cells with motif  ") +
+      ylab("Density") +  xlim(0, 10)
+
+  return(p)
 }
