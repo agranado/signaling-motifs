@@ -173,7 +173,7 @@ plotMotifDist<-function(this_tissue,class = "tissue",binwidth = 3){
   p =ggplot(df, aes(x = freq*100, y = ..density..)) +
       geom_histogram(,position = "identity",binwidth = binwidth) + geom_density() +
       ggtitle(this_tissue) + theme(text = element_text(size=20))  + xlab(" %cells with motif  ") +
-      ylab("Density") +  xlim(0, 10)
+      ylab("Density") +  xlim(0, 100)
 
   return(p)
 }
