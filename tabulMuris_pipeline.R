@@ -35,7 +35,7 @@ batchCorrection_n_Imputation<-function( this_tissue = "Pancreas",k_magic = 4, np
 gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c()){
   # from library mixtools
 
-  if(length(expr_matrix)==0)
+  if(length(expr_matrix)==0){
     expr = sce.seurat[['RNA']]@data[gene,]
   }else{
     expr = expr_matrix[gene,]
@@ -173,7 +173,7 @@ plotMotifDist<-function(this_tissue,class = "tissue",binwidth = 3){
   p =ggplot(df, aes(x = freq*100, y = ..density..)) +
       geom_histogram(,position = "identity",binwidth = binwidth) + geom_density() +
       ggtitle(this_tissue) + theme(text = element_text(size=20))  + xlab(" %cells with motif  ") +
-      ylab("Density") +  xlim(0, 100)
+      ylab("Density") +  xlim(-5, 100)
 
   return(p)
 }
