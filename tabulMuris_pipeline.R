@@ -1,5 +1,5 @@
 #
-library(sva)
+#library(sva)
 # this function assumes a global seurat object for tabula muris sce.seurat saved in ../tabula-muris
 # this function assumes a scran_seurat object (saved in ../tabula-muris/)
 batchCorrection_n_Imputation<-function( this_tissue = "Pancreas",k_magic = 4, npca = 25, t = "auto"){
@@ -30,12 +30,15 @@ batchCorrection_n_Imputation<-function( this_tissue = "Pancreas",k_magic = 4, np
   pancreas_norm_batch_magic = t(pancreas_norm_batch_magic$result)
   return(list(pancreas_norm_batch_magic,pancreas_meta_data))
 }
-
+###############################################
+plot_mix_comps <- function(x, mu, sigma, lam) {
+  lam * dnorm(x, mu, sigma)
+}
 
 gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c()){
   # from library mixtools
 
-  if(length(expr_matrix)==0)
+  if(length(expr_matrix)==0){
     expr = sce.seurat[['RNA']]@data[gene,]
   }else{
     expr = expr_matrix[gene,]
@@ -96,7 +99,6 @@ gaussianFitAssignCluster<-function(mixmdl,  rank_labels = c("0","L","M","H")){
   return(post.df$group)
 }
 
-
 profileDictionary<-function(profiles){
 
   # Take a list of profile
@@ -122,7 +124,6 @@ plotMotifBarPlot<-function(bmp_quant){
   p = ggplot(motif_values, aes(x = genes,y=value)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, hjust = 1))
   return(p)
 }
-
 
 fitSingleGene<-function(gene,plot.all = F,expr_matrix = c(),G= 1:9){
 
@@ -176,4 +177,35 @@ plotMotifDist<-function(this_tissue,class = "tissue",binwidth = 3){
       ylab("Density") +  xlim(0, 100)
 
   return(p)
+}
+
+ # # # # # # # # # # 
+# # # # # # # # # #
+# global meta data object:
+if(!exists("tabula")){
+  sce.seurat@meta.data %>% select(cell, tissue, cell_ontology_class, seurat_clusters) -> tabula
+}
+
+pipelineNov2019<-function(gene.list = bmp.receptors,tabula){
+
+      # Modelng: Gaussian mixture model for each gene across all cell types
+      model_list = lapply(bmp.receptors,gaussianFitGeneExpression,return.plot=F)
+      # Discretization: Label each gene, for each cell
+      all_labels = lapply(model_list, gaussianFitAssignCluster)
+      label_matrix = do.call(cbind,all_labels)
+
+      # Based on the discrete vales, we create a list of words.
+      profiles = apply(do.call(cbind,all_labels),1,paste,sep="",collapse="")
+
+      # Each cell has now a profile assigned
+      tabula$pathway = profiles
+      tabula$pathway_rank = profile_ranks
+
+      tabula$bmp_rank_string = as.character(tabula$bmp_rank)
+      tabula$bmp_rank_string<-factor(tabula$bmp_rank_string,levels = as.character( sort(unique(tabula$bmp_rank))  ))
+
+      # Also we use a string with numerical values (probably more useful)
+      tabula$bmp_quant = unlist(lapply(tabula$bmp, str_replace_all, c( "L" = "1", "M" = "2","H" = "3")))
+      #we want to return the data frame with the list of motifs, and ranks, that can be used for plotting
+      return(tabula)
 }
