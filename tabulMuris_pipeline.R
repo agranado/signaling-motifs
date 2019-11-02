@@ -37,6 +37,11 @@ plot_mix_comps <- function(x, mu, sigma, lam) {
 
 gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c()){
   # from library mixtools
+  low_lim = 1
+  frac_cells = 0.90
+
+
+
 
   if(length(expr_matrix)==0){
     expr = sce.seurat[['RNA']]@data[gene,]
@@ -44,26 +49,12 @@ gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c(
     expr = expr_matrix[gene,]
   }
 
+  k = ifelse(sum(expr<low_lim)/length(expr)>frac_cells, 2,4)
 
-  mixmdl <- normalmixEM(expr,k = 4)
+  mixmdl <- normalmixEM(expr,k = k)
   df = data.frame(x = mixmdl$x)
 
-  p =     ggplot(df) +
-      geom_histogram(aes(x, ..density..), binwidth = max(expr)/100, colour = "black",
-                     fill = "white") +
-      stat_function(geom = "line", fun = plot_mix_comps,
-                    args = list(mixmdl$mu[1], mixmdl$sigma[1], lam = mixmdl$lambda[1]),
-                    colour = "red", lwd = 1.5) +
-      stat_function(geom = "line", fun = plot_mix_comps,
-                    args = list(mixmdl$mu[2], mixmdl$sigma[2], lam = mixmdl$lambda[2]),
-                    colour = "blue", lwd = 1.5) +
-      stat_function(geom = "line", fun = plot_mix_comps,
-                    args = list(mixmdl$mu[3], mixmdl$sigma[3], lam = mixmdl$lambda[3]),
-                    colour = "green", lwd = 1.5) +
-      stat_function(geom = "line", fun = plot_mix_comps,
-                    args = list(mixmdl$mu[4], mixmdl$sigma[4], lam = mixmdl$lambda[4]),
-                    colour = "purple", lwd = 1.5) +
-      ylab("Density") +  ggtitle(gene)
+  p = plotGaussianModel(df,mixmdl,k,gene)
 
   if(return.plot){
     return(p)
@@ -71,6 +62,43 @@ gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c(
     return(mixmdl)
   }
 
+}
+
+plotGaussianModel<-function(df,mixmdl,k,gene){
+
+  if(k==4){
+   p =  ggplot(df) +
+    geom_histogram(aes(x, ..density..), binwidth = max(expr)/100, colour = "black",
+                   fill = "white") +
+    stat_function(geom = "line", fun = plot_mix_comps,
+                  args = list(mixmdl$mu[1], mixmdl$sigma[1], lam = mixmdl$lambda[1]),
+                  colour = "red", lwd = 1.5) +
+    stat_function(geom = "line", fun = plot_mix_comps,
+                  args = list(mixmdl$mu[2], mixmdl$sigma[2], lam = mixmdl$lambda[2]),
+                  colour = "blue", lwd = 1.5) +
+    stat_function(geom = "line", fun = plot_mix_comps,
+                  args = list(mixmdl$mu[3], mixmdl$sigma[3], lam = mixmdl$lambda[3]),
+                  colour = "green", lwd = 1.5) +
+    stat_function(geom = "line", fun = plot_mix_comps,
+                  args = list(mixmdl$mu[4], mixmdl$sigma[4], lam = mixmdl$lambda[4]),
+                  colour = "purple", lwd = 1.5) +
+    ylab("Density") +  ggtitle(gene)
+  }else if(k==2){
+
+    p =  ggplot(df) +
+     geom_histogram(aes(x, ..density..), binwidth = max(expr)/100, colour = "black",
+                    fill = "white") +
+     stat_function(geom = "line", fun = plot_mix_comps,
+                   args = list(mixmdl$mu[1], mixmdl$sigma[1], lam = mixmdl$lambda[1]),
+                   colour = "red", lwd = 1.5) +
+     stat_function(geom = "line", fun = plot_mix_comps,
+                   args = list(mixmdl$mu[2], mixmdl$sigma[2], lam = mixmdl$lambda[2]),
+                   colour = "blue", lwd = 1.5) +
+     ylab("Density") +  ggtitle(gene)
+  }
+
+
+  return(p)
 }
 
 gaussianFitAssignCluster<-function(mixmdl,  rank_labels = c("0","L","M","H")){
@@ -155,20 +183,20 @@ fitSingleGene<-function(gene,plot.all = F,expr_matrix = c(),G= 1:9){
 #cell_ontology_class for cell types
 #tissue for tissues
 #seurat_clusters for clusters (based on transcriptome)
-plotMotifDist<-function(this_tissue,class = "tissue",binwidth = 3){
+plotMotifDist<-function(this_tissue,tabula = tabula, class = "tissue",binwidth = 3){
   #this_tissue = "Brain_Non-Myeloid";
 
 
 
   if(class=="tissue"){
-    tabula %>% group_by(tissue,bmp) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(tissue,desc(count)) -> motifs_by_tissue
-    motifs_by_tissue %>% filter(tissue ==this_tissue) %>% arrange(desc(freq), bmp) ->df
+    tabula %>% group_by(tissue,pathway) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(tissue,desc(count)) -> motifs_by_tissue
+    motifs_by_tissue %>% filter(tissue ==this_tissue) %>% arrange(desc(freq), pathway) ->df
   }else if(class=="cell_ontology_class"){
-    tabula %>% group_by(cell_ontology_class,bmp) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(cell_ontology_class,desc(count)) -> motifs_by_tissue
-    motifs_by_tissue %>% filter(cell_ontology_class ==this_tissue) %>% arrange(desc(freq), bmp) ->df
+    tabula %>% group_by(cell_ontology_class,pathway) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(cell_ontology_class,desc(count)) -> motifs_by_tissue
+    motifs_by_tissue %>% filter(cell_ontology_class ==this_tissue) %>% arrange(desc(freq), pathway) ->df
   }else if(class =="seurat_clusters"){
-    tabula %>% group_by(seurat_clusters,bmp) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_by_tissue
-    motifs_by_tissue %>% filter(seurat_clusters ==this_tissue) %>% arrange(desc(freq), bmp) ->df
+    tabula %>% group_by(seurat_clusters,pathway) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_by_tissue
+    motifs_by_tissue %>% filter(seurat_clusters ==this_tissue) %>% arrange(desc(freq), pathway) ->df
   }
 
   p =ggplot(df, aes(x = freq*100, y = ..density..)) +
@@ -186,10 +214,18 @@ if(!exists("tabula")){
   sce.seurat@meta.data %>% select(cell, tissue, cell_ontology_class, seurat_clusters) -> tabula
 }
 
+# GENERAL PIPELINE, Nov 1st 2019
+# This function takes a list of genes,
+# Retrieves data (normalized and imputed) from the Seurat object (or a matrix, if provided)
+# Applies a GMM to each gene across all cells with either k = 2 for low expressed and k =4 for all other genes
+# I takes the labels from the GMM and created a word with size N= number of genes
+# For the general data-frame, each single cell now has a word associated with it that represents the expression profile
+# The rank of each profile: inverse frequency is also calculated
+# The output data frame can then be used as input for plotting and statistics functions
 pipelineNov2019<-function(gene.list = bmp.receptors,tabula){
 
       # Modelng: Gaussian mixture model for each gene across all cell types
-      model_list = lapply(bmp.receptors,gaussianFitGeneExpression,return.plot=F)
+      model_list = lapply(gene.list,gaussianFitGeneExpression,return.plot=F)
       # Discretization: Label each gene, for each cell
       all_labels = lapply(model_list, gaussianFitAssignCluster)
       label_matrix = do.call(cbind,all_labels)
@@ -199,13 +235,96 @@ pipelineNov2019<-function(gene.list = bmp.receptors,tabula){
 
       # Each cell has now a profile assigned
       tabula$pathway = profiles
+
+      profile_ranks <- profileDictionary(profiles)
+
       tabula$pathway_rank = profile_ranks
 
-      tabula$bmp_rank_string = as.character(tabula$bmp_rank)
-      tabula$bmp_rank_string<-factor(tabula$bmp_rank_string,levels = as.character( sort(unique(tabula$bmp_rank))  ))
+      tabula$pathway_rank_string = as.character(tabula$pathway_rank)
+      tabula$pathway_rank_string<-factor(tabula$pathway_rank_string,levels = as.character( sort(unique(tabula$pathway_rank))  ))
 
       # Also we use a string with numerical values (probably more useful)
-      tabula$bmp_quant = unlist(lapply(tabula$bmp, str_replace_all, c( "L" = "1", "M" = "2","H" = "3")))
+      tabula$pathway_quant = unlist(lapply(tabula$pathway, str_replace_all, c( "L" = "1", "M" = "2","H" = "3")))
       #we want to return the data frame with the list of motifs, and ranks, that can be used for plotting
       return(tabula)
+}
+
+# INTERNAL 
+groupMotifsBy<-function(tabula, class ="seurat_clusters"){
+  if(class =="seurat_clusters"){
+    tabula %>% group_by(seurat_clusters,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_by_cluster
+
+  }else if(class =="tissue"){
+
+    tabula %>% group_by(tissue,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(tissue,desc(count)) -> motifs_by_cluster
+  }else if(class =="cell_ontology_class"){
+
+    tabula %>% group_by(cell_ontology_class,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(cell_ontology_class,desc(count)) -> motifs_by_cluster
+  }
+
+  return(motifs_by_cluster)
+}
+
+# USE THIS
+kMeansOnMotifs<-function(tabula, k = 100, class = "seurat_clusters"){
+
+    motifs_by_cluster = groupMotifsBy(tabula, class)
+      #extract profiles as string of numbers
+    all_motifs_quant_bycluster<-motifs_by_cluster$pathway_quant
+
+    # split string, convert to number and arrange as matrix
+    all_motifs_quant_number= do.call(rbind,lapply(lapply(all_motifs_quant_bycluster,str_split,"",simplify=T),as.numeric))
+
+    #Cluster by k-means with k = 100
+    k = kmeans(all_motifs_quant_number,100)
+
+    #save the labels as a new field in the motif data-frame
+    motifs_by_cluster$motif_class = k$cluster
+
+    motifs_by_cluster
+}
+
+
+
+## # # # # plottting moitfs
+# HEATMAP after kmeans
+heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters"){
+
+  clust_vs_motifs = data.frame()
+
+  if(class == "seurat_clusters"){
+    motifs_by_cluster %>% group_by(seurat_clusters,motif_class) %>% summarise(class_freq = sum(freq)) %>% arrange(seurat_clusters, desc(class_freq)) %>%
+        filter(class_freq>0.1) %>% spread(key = seurat_clusters,value= class_freq,fill =0) -> clust_vs_motifs;
+  }else if( class =="tissue"){
+    motifs_by_cluster %>% group_by(tissue,motif_class) %>% summarise(class_freq = sum(freq)) %>% arrange(tissue, desc(class_freq)) %>%
+        filter(class_freq>0.1) %>% spread(key = tissue,value= class_freq,fill =0) -> clust_vs_motifs;
+  }else if(class =="cell_ontology_class"){
+    motifs_by_cluster %>% group_by(cell_ontology_class,motif_class) %>% summarise(class_freq = sum(freq)) %>% arrange(cell_ontology_class, desc(class_freq)) %>%
+        filter(class_freq>0.1) %>% spread(key = cell_ontology_class,value= class_freq,fill =0) -> clust_vs_motifs;
+  }
+
+  # common for all classes
+  clust_vs_motifs %>% select(-motif_class) %>% as.data.frame() -> clust_vs_motifs_mat ;
+
+  row.names(clust_vs_motifs_mat)  = clust_vs_motifs$motif_class ;
+  p= pheatmap(clust_vs_motifs_mat,fontsize = 12);
+  x11(); plot(p[[4]]) ;
+
+}
+
+makePlots(tabula = tabula){
+
+
+
+
+}
+
+atLeastN_motifsWithPercent<-function(tabula = tabula, howMany = 1){
+  n_clusters = c(); vals = seq(0,1,0.05)
+  for(i in 1:length(vals)){
+    motifs_by_cluster %>% mutate(is_more_than = freq>vals[i]) %>% group_by(seurat_clusters) %>%
+        summarise(motifs =sum(is_more_than)) %>% mutate(motifs_here = motifs >= howMany) %>% summarise(clusters_with_motifs =sum(motifs_here)) -> n_clusters_with_motif
+    n_clusters[i] =  n_clusters_with_motif$clusters_with_motifs
+  }
+  return(n_clusters)
 }
