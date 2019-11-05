@@ -35,19 +35,25 @@ plot_mix_comps <- function(x, mu, sigma, lam) {
   lam * dnorm(x, mu, sigma)
 }
 
+# gaussianFitGeneExpression
+# This function takes a list of genes
+# subsets the data from either a global Seurat object names sce.seurat[['RNA']]
+# OR from a expression matrix provided by the user (this could be any normalized/imputed count matrix )
+# FOR each gene, it will find a GMM that fits the data either with k=4 or k=2 depending on the range
+# low expressed genes (with most cells having expression values below 1.0) will use k=2: ON/OFF model
+# whereas genes with wider range will use k=4: 0, low, medium, high
 gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c()){
   # from library mixtools
   low_lim = 1
   frac_cells = 0.90
-
-
-
 
   if(length(expr_matrix)==0){
     expr = sce.seurat[['RNA']]@data[gene,]
   }else{
     expr = expr_matrix[gene,]
   }
+
+
 
   k = ifelse(sum(expr<low_lim)/length(expr)>frac_cells, 2,4)
 
@@ -63,12 +69,14 @@ gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c(
   }
 
 }
-
+# Based on the ouput of gaussianFitGeneExpression which applies the function from mixtools
+# plotGaussianModel will use ggplot to plot a histogram + density by GGM cluster using different colors,
+# this is good for visualization of the gaussian fit
 plotGaussianModel<-function(df,mixmdl,k,gene){
 
   if(k==4){
    p =  ggplot(df) +
-    geom_histogram(aes(x, ..density..), binwidth = max(expr)/100, colour = "black",
+    geom_histogram(aes(x, ..density..), binwidth = max(mixmdl$x)/100, colour = "black",
                    fill = "white") +
     stat_function(geom = "line", fun = plot_mix_comps,
                   args = list(mixmdl$mu[1], mixmdl$sigma[1], lam = mixmdl$lambda[1]),
@@ -86,7 +94,7 @@ plotGaussianModel<-function(df,mixmdl,k,gene){
   }else if(k==2){
 
     p =  ggplot(df) +
-     geom_histogram(aes(x, ..density..), binwidth = max(expr)/100, colour = "black",
+     geom_histogram(aes(x, ..density..), binwidth = max(mixmdl$x)/100, colour = "black",
                     fill = "white") +
      stat_function(geom = "line", fun = plot_mix_comps,
                    args = list(mixmdl$mu[1], mixmdl$sigma[1], lam = mixmdl$lambda[1]),
@@ -107,21 +115,29 @@ gaussianFitAssignCluster<-function(mixmdl,  rank_labels = c("0","L","M","H")){
   frac_cells = 0.90
 
 
-  #before assigning cluster labels let's check if the expression passes some filters
-  #for VERY lowly expressed genes, we should reduce the number of clases
-  if(sum(mixmdl$x<low_lim)/length(mixmdl$x) > frac_cells){
-    #re do the cluster with k =2 , for ON/OFF labels
-    expr= mixmdl$x
-    mixmdl <- normalmixEM(expr,k = 2)
-    rank_labels = c("0","L")
-  }
+  # #before assigning cluster labels let's check if the expression passes some filters
+  # #for VERY lowly expressed genes, we should reduce the number of clases
+  # if(sum(mixmdl$x<low_lim)/length(mixmdl$x) > frac_cells){
+  #   #re do the cluster with k =2 , for ON/OFF labels
+  #   expr= mixmdl$x
+  #   mixmdl <- normalmixEM(expr,k = 2)
+  #   rank_labels = c("0","L")
+  # }
+
+  if(length(mixmdl$mu)==2)
+        rank_labels = c("0","L")
 
 
+  # post.df includes all the X values that were classified by the GMM
+  # each X value represents the expression level of a single cell
   post.df <- as.data.frame(cbind(x = mixmdl$x, mixmdl$posterior))
+  # The 1st column of the data frame is the X value
+  # The other colums are the likelihood of each one of the clusters (labels)
   names(post.df)<-c("x",rank_labels[rank(mixmdl$mu)])
 
-
-  assignLabel = function(x){names(which.max(x[2:5]))}
+  # The first colum contains the X values, we want the max over the columns that contain the labels
+  # Small function to take the name of the colum with the max value
+  assignLabel = function(x){names(which.max(x[-1]))}
   post.df$group = apply(post.df,1,assignLabel)
 
   return(post.df$group)
@@ -222,10 +238,32 @@ if(!exists("tabula")){
 # For the general data-frame, each single cell now has a word associated with it that represents the expression profile
 # The rank of each profile: inverse frequency is also calculated
 # The output data frame can then be used as input for plotting and statistics functions
-pipelineNov2019<-function(gene.list = bmp.receptors,tabula){
+pipelineNov2019<-function(tabula = tabula, gene.list = bmp.receptors,expr_matrix = c(),control = F){
 
-      # Modelng: Gaussian mixture model for each gene across all cell types
-      model_list = lapply(gene.list,gaussianFitGeneExpression,return.plot=F)
+      exec_parallel = T
+
+      if(length(expr_matrix)==0){
+        expr = sce.seurat[['RNA']]@data[gene,]
+      }else{
+        expr = expr_matrix[gene.list,]
+      }
+
+      # Control type 1: conserve the distribution of expression across cell for all genes
+      # But randomize across cells such that gene-gene correlations are lost
+      if(control ==1){
+          expr_matrix  = randomizeMatrix(expr_matrix)
+      }else if(control==2){
+          tabula$seurat_clusters  = sample(tabula$seurat_clusters)
+      }
+
+
+      if(!exec_parallel){
+        # Modelng: Gaussian mixture model for each gene across all cell types
+        model_list = lapply(gene.list,gaussianFitGeneExpression,return.plot=F,expr_matrix= expr_matrix)
+      }else{
+        model_list = mclapply(gene.list, gaussianFitGeneExpression, return.plot = F,expr_matrix = expr_matrix,mc.cores = 8)
+      }
+
       # Discretization: Label each gene, for each cell
       all_labels = lapply(model_list, gaussianFitAssignCluster)
       label_matrix = do.call(cbind,all_labels)
@@ -249,7 +287,7 @@ pipelineNov2019<-function(gene.list = bmp.receptors,tabula){
       return(tabula)
 }
 
-# INTERNAL 
+# INTERNAL
 groupMotifsBy<-function(tabula, class ="seurat_clusters"){
   if(class =="seurat_clusters"){
     tabula %>% group_by(seurat_clusters,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_by_cluster
@@ -284,23 +322,23 @@ kMeansOnMotifs<-function(tabula, k = 100, class = "seurat_clusters"){
     motifs_by_cluster
 }
 
-
+# Documentation on plotting functions
 
 ## # # # # plottting moitfs
 # HEATMAP after kmeans
-heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters"){
+heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters",min.pct = 0.1){
 
   clust_vs_motifs = data.frame()
 
   if(class == "seurat_clusters"){
     motifs_by_cluster %>% group_by(seurat_clusters,motif_class) %>% summarise(class_freq = sum(freq)) %>% arrange(seurat_clusters, desc(class_freq)) %>%
-        filter(class_freq>0.1) %>% spread(key = seurat_clusters,value= class_freq,fill =0) -> clust_vs_motifs;
+        filter(class_freq>min.pct) %>% spread(key = seurat_clusters,value= class_freq,fill =0) -> clust_vs_motifs;
   }else if( class =="tissue"){
     motifs_by_cluster %>% group_by(tissue,motif_class) %>% summarise(class_freq = sum(freq)) %>% arrange(tissue, desc(class_freq)) %>%
-        filter(class_freq>0.1) %>% spread(key = tissue,value= class_freq,fill =0) -> clust_vs_motifs;
+        filter(class_freq>min.pct) %>% spread(key = tissue,value= class_freq,fill =0) -> clust_vs_motifs;
   }else if(class =="cell_ontology_class"){
     motifs_by_cluster %>% group_by(cell_ontology_class,motif_class) %>% summarise(class_freq = sum(freq)) %>% arrange(cell_ontology_class, desc(class_freq)) %>%
-        filter(class_freq>0.1) %>% spread(key = cell_ontology_class,value= class_freq,fill =0) -> clust_vs_motifs;
+        filter(class_freq>min.pct) %>% spread(key = cell_ontology_class,value= class_freq,fill =0) -> clust_vs_motifs;
   }
 
   # common for all classes
@@ -312,19 +350,31 @@ heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters"){
 
 }
 
-makePlots(tabula = tabula){
-
-
-
+# This function will take default parameters
+# subset the gene list and perform GMM + clustering using k-means
+# the result is a data frame grouped by seurat_cluster in which we can see the fraction of cells
+# that have a particular motif, from here we can do few different plots, se this is the base unit comparing
+# mutliple pathways, conditions etc
+runFullPipeline<-function(tabula = tabula, input_matrix  = c(),gene.list = notch.genes, control_type = 0,  group_classes = "seurat_clusters"){
+  tabula %>% select( cell,tissue,cell_ontology_class,seurat_clusters) %>%
+      pipelineNov2019(gene.list = notch.genes, expr_matrix = input_matrix,control = control_type) %>%
+          groupMotifsBy( class = group_classes) -> motifs_by_cluster_rand
 
 }
 
-atLeastN_motifsWithPercent<-function(tabula = tabula, howMany = 1){
-  n_clusters = c(); vals = seq(0,1,0.05)
+atLeastN_motifsWithPercent<-function(motifs_by_cluster, tabula = tabula, howMany = 1,  vals = seq(0,1,0.05)){
+  n_clusters = c();
   for(i in 1:length(vals)){
     motifs_by_cluster %>% mutate(is_more_than = freq>vals[i]) %>% group_by(seurat_clusters) %>%
         summarise(motifs =sum(is_more_than)) %>% mutate(motifs_here = motifs >= howMany) %>% summarise(clusters_with_motifs =sum(motifs_here)) -> n_clusters_with_motif
     n_clusters[i] =  n_clusters_with_motif$clusters_with_motifs
   }
   return(n_clusters)
+}
+
+# CONTROL
+randomizeMatrix<-function(expr_matrix){
+  #randomize over rows: keep distribution for each gene the same but destroys gene-gene correlations
+  return(t(apply(expr_matrix,1,sample)))
+
 }
