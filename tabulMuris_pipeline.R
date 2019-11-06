@@ -1,5 +1,14 @@
 #
 #library(sva)
+library("dplyr")
+library("mixtools")
+library("ggplot2")
+library("stringr")
+
+
+notch.genes = c("Dll1",   "Dll3"   ,"Dll4",   "Dtx1",   "Jag1"  , "Jag2", "Notch1", "Notch2", "Notch3", "Notch4", "Mfng",  "Rfng"  , "Lfng",   "Dlk1",   "Dlk2")
+bmp.receptors<-c( "Bmpr1a" ,"Bmpr1b" ,"Acvr1"  ,"Acvrl1" ,"Acvr1b" ,"Tgfbr1" ,"Acvr1c" ,"Acvr2a", "Acvr2b", "Bmpr2" ,"Tgfbr2")
+
 # this function assumes a global seurat object for tabula muris sce.seurat saved in ../tabula-muris
 # this function assumes a scran_seurat object (saved in ../tabula-muris/)
 batchCorrection_n_Imputation<-function( this_tissue = "Pancreas",k_magic = 4, npca = 25, t = "auto"){
@@ -340,7 +349,7 @@ kMeansOnMotifs<-function(motifs_by_cluster, k = 100, class = "seurat_clusters"){
     all_motifs_quant_number= do.call(rbind,lapply(lapply(all_motifs_quant_bycluster,str_split,"",simplify=T),as.numeric))
 
     #Cluster by k-means with k = 100
-    k = kmeans(all_motifs_quant_number,100)
+    k = kmeans(all_motifs_quant_number,k)
 
     #save the labels as a new field in the motif data-frame
     motifs_by_cluster$motif_class = k$cluster
@@ -352,7 +361,7 @@ kMeansOnMotifs<-function(motifs_by_cluster, k = 100, class = "seurat_clusters"){
 ## # # # # plottting moitfs
 # Plots a heatmap + histogram
 # RUN AFTER doing kMeansOnMotifs
-heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters",min.pct = 0.1){
+heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters",min.pct = 0.1,return.plot = F){
 
   clust_vs_motifs = data.frame()
 
@@ -370,12 +379,24 @@ heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters",min
   # common for all classes
   clust_vs_motifs %>% select(-motif_class) %>% as.data.frame() -> clust_vs_motifs_mat ;
 
+
+
   row.names(clust_vs_motifs_mat)  = clust_vs_motifs$motif_class ;
   p= pheatmap(clust_vs_motifs_mat,fontsize = 12);
-  x11(); plot(p[[4]]) ;
 
-  x11();
-  hist(rowSums(clust_vs_motifs_mat>min.pct),main="Number of cell types in which motifs express",xlab="N cell types")
+  if(!return.plot){
+    x11(); plot(p[[4]]) ;
+
+    x11();
+    hist(rowSums(clust_vs_motifs_mat>min.pct),main="Number of cell types in which motifs express",xlab="N cell types")
+  }else{
+
+    p2= as.grob(function() hist(rowSums(clust_vs_motifs_mat>min.pct),main="N of cell types in which motifs express",xlab="N cell types"))
+
+    return(list(p,p2))
+  }
+
+
 }
 
 
@@ -405,7 +426,25 @@ filterNonExpressing<-function(motifs_by_cluster){
 
 
 
+makeAllPlots<-function(result, this_pathway,k = 100){
+  # number of cluster with at least one motif at different levels of dominance
+  p= as.grob(function() plot(seq(0,1,0.05)*100,atLeastN_motifsWithPercent(result,vals = seq(0,1,0.05)),lwd =2,type ="o",ylab="Number of cell types",xlab="Motif dominance (% cells)") )
 
+  p2= ggplot(result, aes(x = n_expres)) + geom_histogram() + ggtitle(this_pathway) + theme(text = element_text(size=20))  + xlab(" Genes expressed  ") +
+  ylab("Number of profiles")
+
+
+  gglist = heatmapKMeansClasses( kMeansOnMotifs(result,k=k),return.plot = T)
+
+  p3= gglist[[1]]
+  p4 = gglist[[2]]
+
+  lay <- rbind(c(1,1,2,3),c(1,1,4,5))
+
+  x11();
+  grid.arrange(grobs = list(p3[[4]],p,p2,p4), layout_matrix = lay)
+
+}
 
 
 
