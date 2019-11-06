@@ -48,7 +48,7 @@ gaussianFitGeneExpression<-function(gene,k = 4, return.plot = T,expr_matrix = c(
   frac_cells = 0.90
 
   if(length(expr_matrix)==0){
-    expr = sce.seurat[['RNA']]@data[gene,]
+  #  expr = sce.seurat[['RNA']]@data[gene,]
   }else{
     expr = expr_matrix[gene,]
   }
@@ -240,13 +240,13 @@ if(!exists("tabula")){
 # The output data frame can then be used as input for plotting and statistics functions
 pipelineNov2019<-function(tabula = tabula, gene.list = bmp.receptors,expr_matrix = c(),control = F){
 
-      exec_parallel = T
+      exec_parallel = F
 
-      if(length(expr_matrix)==0){
-        expr = sce.seurat[['RNA']]@data[gene,]
-      }else{
-        expr = expr_matrix[gene.list,]
-      }
+      # if(length(expr_matrix)==0){
+      #   #expr = sce.seurat[['RNA']]@data[gene,]
+      # }else{
+      #   expr = expr_matrix[gene.list,]
+      # }
 
       # Control type 1: conserve the distribution of expression across cell for all genes
       # But randomize across cells such that gene-gene correlations are lost
@@ -290,24 +290,50 @@ pipelineNov2019<-function(tabula = tabula, gene.list = bmp.receptors,expr_matrix
 # INTERNAL
 groupMotifsBy<-function(tabula, class ="seurat_clusters"){
   if(class =="seurat_clusters"){
-    tabula %>% group_by(seurat_clusters,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_by_cluster
+    tabula %>% group_by(seurat_clusters,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_df
 
   }else if(class =="tissue"){
 
-    tabula %>% group_by(tissue,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(tissue,desc(count)) -> motifs_by_cluster
+    tabula %>% group_by(tissue,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(tissue,desc(count)) -> motifs_df
   }else if(class =="cell_ontology_class"){
 
-    tabula %>% group_by(cell_ontology_class,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(cell_ontology_class,desc(count)) -> motifs_by_cluster
+    tabula %>% group_by(cell_ontology_class,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(cell_ontology_class,desc(count)) -> motifs_df
   }
 
-  return(motifs_by_cluster)
+  return(motifs_df)
 }
 
-# USE THIS
-kMeansOnMotifs<-function(tabula, k = 100, class = "seurat_clusters"){
+# Documentation on plotting functions
 
-    motifs_by_cluster = groupMotifsBy(tabula, class)
+
+# # # # # # #
+# # # # # # #
+# MAIN
+# This function will take default parameters
+# subset the gene list and perform GMM + clustering using k-means
+# the result is a data frame grouped by seurat_cluster in which we can see the fraction of cells
+# that have a particular motif, from here we can do few different plots, se this is the base unit comparing
+# mutliple pathways, conditions etc
+runFullPipeline<-function(tabula = tabula, input_matrix  = c(),gene.list = notch.genes, control_type = 0,  group_classes = "seurat_clusters"){
+  tabula %>% select( cell,tissue,cell_ontology_class,seurat_clusters) %>%
+      pipelineNov2019(gene.list = gene.list, expr_matrix = input_matrix,control = control_type) %>%
+          groupMotifsBy( class = group_classes) -> motifs_by_cluster_rand
+
+}
+
+
+# # # # # # # # # # # # # # # # # # #
+ # # # ANALYSIS  + PLOTS # # # # # #
+# USE THESE functions with output of runFullPipeline
+
+# Adds a new column with the k-means class for each motif-celltype combination
+# The frequencies are NOT changed, and therefore one has to group_by motif_class, seurat_clusters %>% summarise( sum(freq))
+kMeansOnMotifs<-function(motifs_by_cluster, k = 100, class = "seurat_clusters"){
+
+
+    #motifs_by_cluster = groupMotifsBy(tabula, class)
       #extract profiles as string of numbers
+
     all_motifs_quant_bycluster<-motifs_by_cluster$pathway_quant
 
     # split string, convert to number and arrange as matrix
@@ -322,10 +348,10 @@ kMeansOnMotifs<-function(tabula, k = 100, class = "seurat_clusters"){
     motifs_by_cluster
 }
 
-# Documentation on plotting functions
 
 ## # # # # plottting moitfs
-# HEATMAP after kmeans
+# Plots a heatmap + histogram
+# RUN AFTER doing kMeansOnMotifs
 heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters",min.pct = 0.1){
 
   clust_vs_motifs = data.frame()
@@ -348,20 +374,13 @@ heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters",min
   p= pheatmap(clust_vs_motifs_mat,fontsize = 12);
   x11(); plot(p[[4]]) ;
 
+  x11();
+  hist(rowSums(clust_vs_motifs_mat>min.pct),main="Number of cell types in which motifs express",xlab="N cell types")
 }
 
-# This function will take default parameters
-# subset the gene list and perform GMM + clustering using k-means
-# the result is a data frame grouped by seurat_cluster in which we can see the fraction of cells
-# that have a particular motif, from here we can do few different plots, se this is the base unit comparing
-# mutliple pathways, conditions etc
-runFullPipeline<-function(tabula = tabula, input_matrix  = c(),gene.list = notch.genes, control_type = 0,  group_classes = "seurat_clusters"){
-  tabula %>% select( cell,tissue,cell_ontology_class,seurat_clusters) %>%
-      pipelineNov2019(gene.list = notch.genes, expr_matrix = input_matrix,control = control_type) %>%
-          groupMotifsBy( class = group_classes) -> motifs_by_cluster_rand
 
-}
-
+# This one can take motifs that are RAW from runFullPipeline OR after doing kMeansOnMotifs
+# I will count how many motifs appear on a cell type with > x%
 atLeastN_motifsWithPercent<-function(motifs_by_cluster, tabula = tabula, howMany = 1,  vals = seq(0,1,0.05)){
   n_clusters = c();
   for(i in 1:length(vals)){
@@ -371,6 +390,25 @@ atLeastN_motifsWithPercent<-function(motifs_by_cluster, tabula = tabula, howMany
   }
   return(n_clusters)
 }
+
+
+# Filter non-expressing profiles/cell that don't comply with criteria
+# Run this after the profiles are found: Some sets of genes might be only non-expressing -> over-represented "motifs"
+filterNonExpressing<-function(motifs_by_cluster){
+
+  numeric_profiles = do.call(rbind,lapply(lapply(motifs_by_cluster$pathway_quant,str_split,"",simplify=T),as.numeric) )
+  motifs_by_cluster$n_expres = rowSums(numeric_profiles>0)
+  motifs_by_cluster$sum_expres = rowSums(numeric_profiles)
+
+  return(motifs_by_cluster)
+}
+
+
+
+
+
+
+
 
 # CONTROL
 randomizeMatrix<-function(expr_matrix){
