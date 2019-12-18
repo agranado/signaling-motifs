@@ -5,9 +5,31 @@ library("mixtools")
 library("ggplot2")
 library("stringr")
 
+library(gridExtra)
+library(ggplotify)
+library(tidyr)
+library(pheatmap)
+
+
+
+# # # # # #
+# PATHWAYS
+# # # # # #
 
 notch.genes = c("Dll1",   "Dll3"   ,"Dll4",   "Dtx1",   "Jag1"  , "Jag2", "Notch1", "Notch2", "Notch3", "Notch4", "Mfng",  "Rfng"  , "Lfng",   "Dlk1",   "Dlk2")
 bmp.receptors<-c( "Bmpr1a" ,"Bmpr1b" ,"Acvr1"  ,"Acvrl1" ,"Acvr1b" ,"Tgfbr1" ,"Acvr1c" ,"Acvr2a", "Acvr2b", "Bmpr2" ,"Tgfbr2")
+# from James Dec 3rd
+# Frizzled receptors
+wnt.receptors = c( paste('Fzd',as.character(seq(1,10)),sep=""), 'Lrp5', 'Lrp6')
+wnt.ligands = grep('Wnt.*',row.names(sce.seurat),value = T)
+wnt.genes = c(wnt.receptors, wnt.ligands)
+
+
+
+
+
+
+
 
 # this function assumes a global seurat object for tabula muris sce.seurat saved in ../tabula-muris
 # this function assumes a scran_seurat object (saved in ../tabula-muris/)
@@ -239,7 +261,24 @@ if(!exists("tabula")){
   sce.seurat@meta.data %>% select(cell, tissue, cell_ontology_class, seurat_clusters) -> tabula
 }
 
-# GENERAL PIPELINE, Nov 1st 2019
+
+# # # # # # #
+# # # # # # #
+# MAIN
+# This function will take default parameters
+# subset the gene list and perform GMM + clustering using k-means
+# the result is a data frame grouped by seurat_cluster in which we can see the fraction of cells
+# that have a particular motif, from here we can do few different plots, se this is the base unit comparing
+# mutliple pathways, conditions etc
+runFullPipeline<-function(tabula = tabula, input_matrix  = c(),gene.list = notch.genes, control_type = 0,  group_classes = "seurat_clusters"){
+  tabula %>% select( cell,tissue,cell_ontology_class,seurat_clusters) %>%
+      pipelineNov2019(gene.list = gene.list, expr_matrix = input_matrix,control = control_type) %>%
+          groupMotifsBy( class = group_classes) -> motifs_by_cluster_rand
+
+}
+
+
+# GENERAL PIPELINE, Nov 1st 2019 for SINGLE CELLS
 # This function takes a list of genes,
 # Retrieves data (normalized and imputed) from the Seurat object (or a matrix, if provided)
 # Applies a GMM to each gene across all cells with either k = 2 for low expressed and k =4 for all other genes
@@ -296,39 +335,10 @@ pipelineNov2019<-function(tabula = tabula, gene.list = bmp.receptors,expr_matrix
       return(tabula)
 }
 
-# INTERNAL
-groupMotifsBy<-function(tabula, class ="seurat_clusters"){
-  if(class =="seurat_clusters"){
-    tabula %>% group_by(seurat_clusters,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_df
-
-  }else if(class =="tissue"){
-
-    tabula %>% group_by(tissue,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(tissue,desc(count)) -> motifs_df
-  }else if(class =="cell_ontology_class"){
-
-    tabula %>% group_by(cell_ontology_class,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(cell_ontology_class,desc(count)) -> motifs_df
-  }
-
-  return(motifs_df)
-}
-
-# Documentation on plotting functions
 
 
-# # # # # # #
-# # # # # # #
-# MAIN
-# This function will take default parameters
-# subset the gene list and perform GMM + clustering using k-means
-# the result is a data frame grouped by seurat_cluster in which we can see the fraction of cells
-# that have a particular motif, from here we can do few different plots, se this is the base unit comparing
-# mutliple pathways, conditions etc
-runFullPipeline<-function(tabula = tabula, input_matrix  = c(),gene.list = notch.genes, control_type = 0,  group_classes = "seurat_clusters"){
-  tabula %>% select( cell,tissue,cell_ontology_class,seurat_clusters) %>%
-      pipelineNov2019(gene.list = gene.list, expr_matrix = input_matrix,control = control_type) %>%
-          groupMotifsBy( class = group_classes) -> motifs_by_cluster_rand
 
-}
+
 
 
 # # # # # # # # # # # # # # # # # # #
@@ -357,6 +367,31 @@ kMeansOnMotifs<-function(motifs_by_cluster, k = 100, class = "seurat_clusters"){
     motifs_by_cluster
 }
 
+
+# This one can take motifs that are RAW from runFullPipeline OR after doing kMeansOnMotifs
+# I will count how many motifs appear on a cell type with > x%
+atLeastN_motifsWithPercent<-function(motifs_by_cluster, tabula = tabula, howMany = 1,  vals = seq(0,1,0.05), group_class = 'seurat_clusters'){
+  n_clusters = c();
+  for(i in 1:length(vals)){
+    motifs_by_cluster %>% mutate(is_more_than = freq>vals[i]) %>% group_by_at(.vars = c(group_class)) %>%
+        summarise(motifs =sum(is_more_than)) %>% mutate(motifs_here = motifs >= howMany) %>% summarise(clusters_with_motifs =sum(motifs_here)) -> n_clusters_with_motif
+    n_clusters[i] =  n_clusters_with_motif$clusters_with_motifs
+  }
+  return(n_clusters)
+}
+
+atLeastN_2<-function(df = c(), freq_val, class = 'seurat_clusters'){
+        df %>% mutate(is_more_than = freq>freq_val) %>% group_by_at(.vars = c(class)) %>%
+        summarise(motifs = sum(is_more_than)) %>% mutate(motifs_here  = motifs>=1 ) %>% summarise(clusters_with_motifs = sum(motifs_here)) ->aa
+
+  return(aa)
+}
+
+
+
+# # # # ## # #
+# VISUALIZATION
+# # # # # # #
 
 ## # # # # plottting moitfs
 # Plots a heatmap + histogram
@@ -400,18 +435,46 @@ heatmapKMeansClasses<- function(motifs_by_cluster, class = "seurat_clusters",min
 }
 
 
-# This one can take motifs that are RAW from runFullPipeline OR after doing kMeansOnMotifs
-# I will count how many motifs appear on a cell type with > x%
-atLeastN_motifsWithPercent<-function(motifs_by_cluster, tabula = tabula, howMany = 1,  vals = seq(0,1,0.05)){
-  n_clusters = c();
-  for(i in 1:length(vals)){
-    motifs_by_cluster %>% mutate(is_more_than = freq>vals[i]) %>% group_by(seurat_clusters) %>%
-        summarise(motifs =sum(is_more_than)) %>% mutate(motifs_here = motifs >= howMany) %>% summarise(clusters_with_motifs =sum(motifs_here)) -> n_clusters_with_motif
-    n_clusters[i] =  n_clusters_with_motif$clusters_with_motifs
-  }
-  return(n_clusters)
+makeAllPlots<-function(result, this_pathway,k = 100,class = 'seurat_clusters',min.pct = 0.1){
+  # number of cluster with at least one motif at different levels of dominance
+
+  #at_lest_array = atLeastN_motifsWithPercent(result,vals = seq(0,1,0.05), group_class= class )
+  at_least_array =   as.array( unlist(lapply(seq(0,1,0.05), atLeastN_2, df = result ,class = class )   )  )
+
+  p= as.grob(function() plot(seq(0,1,0.05)*100,  at_least_array   ,lwd =2,type ="o",ylab="Number of cell types",xlab="Motif dominance (% cells)"))
+
+
+
+
+
+  p2= ggplot(result, aes(x = n_expres)) + geom_histogram() + ggtitle(this_pathway) + theme(text = element_text(size=20))  + xlab(" Genes expressed  ") +
+  ylab("Number of profiles")
+
+
+  gglist = heatmapKMeansClasses(result,return.plot = T, class= class, min.pct = min.pct)
+
+  p3= gglist[[1]]
+  p4 = gglist[[2]]
+
+  result %>% filter(freq>0.05) %>% ggplot(aes(x = freq)) + geom_histogram()  + xlab("% cells p/cluster in which a profile is observed") +  theme(text = element_text(size=20)) + ggtitle("Distribution of profile prevalence in global clusters")  + ylab("Number of profiles") -> p5
+
+
+  lay <- rbind(c(1,1,2,3),c(1,1,4,5))
+
+  x11();
+  grid.arrange(grobs = list(p3[[4]],p,p2,p4,p5), layout_matrix = lay)
+
 }
 
+
+
+
+
+
+
+# # # # # #
+# UTILITIES
+# # # # # #
 
 # Filter non-expressing profiles/cell that don't comply with criteria
 # Run this after the profiles are found: Some sets of genes might be only non-expressing -> over-represented "motifs"
@@ -424,29 +487,21 @@ filterNonExpressing<-function(motifs_by_cluster){
   return(motifs_by_cluster)
 }
 
+# INTERNAL
+groupMotifsBy<-function(tabula, class ="seurat_clusters"){
+  if(class =="seurat_clusters"){
+    tabula %>% group_by(seurat_clusters,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(seurat_clusters,desc(count)) -> motifs_df
 
+  }else if(class =="tissue"){
 
-makeAllPlots<-function(result, this_pathway,k = 100){
-  # number of cluster with at least one motif at different levels of dominance
-  p= as.grob(function() plot(seq(0,1,0.05)*100,atLeastN_motifsWithPercent(result,vals = seq(0,1,0.05)),lwd =2,type ="o",ylab="Number of cell types",xlab="Motif dominance (% cells)") )
+    tabula %>% group_by(tissue,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(tissue,desc(count)) -> motifs_df
+  }else if(class =="cell_ontology_class"){
 
-  p2= ggplot(result, aes(x = n_expres)) + geom_histogram() + ggtitle(this_pathway) + theme(text = element_text(size=20))  + xlab(" Genes expressed  ") +
-  ylab("Number of profiles")
+    tabula %>% group_by(cell_ontology_class,pathway_quant) %>% summarise(count = n()) %>% mutate(freq = count/sum(count)) %>% arrange(cell_ontology_class,desc(count)) -> motifs_df
+  }
 
-
-  gglist = heatmapKMeansClasses( kMeansOnMotifs(result,k=k),return.plot = T)
-
-  p3= gglist[[1]]
-  p4 = gglist[[2]]
-
-  lay <- rbind(c(1,1,2,3),c(1,1,4,5))
-
-  x11();
-  grid.arrange(grobs = list(p3[[4]],p,p2,p4), layout_matrix = lay)
-
+  return(motifs_df)
 }
-
-
 
 
 # CONTROL
