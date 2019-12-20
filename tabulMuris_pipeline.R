@@ -26,7 +26,7 @@ wnt.genes = c(wnt.receptors, wnt.ligands)
 
 
 
-
+bmp.downstream = c('Msx2','Gata3','Skil','Eif5a','Llgl1','Rela','Sesn2','Kdm6b','Smad6','Id1','Msx1','Serpine1','Ntrk3','Id2','Id4')
 
 
 
@@ -334,11 +334,6 @@ pipelineNov2019<-function(tabula = tabula, gene.list = bmp.receptors,expr_matrix
       #we want to return the data frame with the list of motifs, and ranks, that can be used for plotting
       return(tabula)
 }
-
-
-
-
-
 
 
 # # # # # # # # # # # # # # # # # # #
