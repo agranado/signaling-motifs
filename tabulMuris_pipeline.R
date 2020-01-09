@@ -21,8 +21,8 @@ bmp.receptors<-c( "Bmpr1a" ,"Bmpr1b" ,"Acvr1"  ,"Acvrl1" ,"Acvr1b" ,"Tgfbr1" ,"A
 # from James Dec 3rd
 # Frizzled receptors
 wnt.receptors = c( paste('Fzd',as.character(seq(1,10)),sep=""), 'Lrp5', 'Lrp6')
-wnt.ligands = grep('Wnt.*',row.names(sce.seurat),value = T)
-wnt.genes = c(wnt.receptors, wnt.ligands)
+#wnt.ligands = grep('Wnt.*',row.names(sce.seurat),value = T)
+#wnt.genes = c(wnt.receptors, wnt.ligands)
 
 
 
@@ -361,6 +361,21 @@ kMeansOnMotifs<-function(motifs_by_cluster, k = 100, class = "seurat_clusters"){
 
     motifs_by_cluster
 }
+
+
+pipelineResToQuant<-function(motifs_by_cluster = c()){
+
+      all_motifs_quant_bycluster<-motifs_by_cluster$pathway_quant
+
+      # split string, convert to number and arrange as matrix
+      all_motifs_quant_number= do.call(rbind,lapply(lapply(all_motifs_quant_bycluster,str_split,"",simplify=T),as.numeric))
+
+      return(all_motifs_quant_number)
+}
+
+
+
+
 
 
 # This one can take motifs that are RAW from runFullPipeline OR after doing kMeansOnMotifs

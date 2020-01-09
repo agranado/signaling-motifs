@@ -118,12 +118,17 @@ retrieveDownstreamProfiles<-function(df_anno,reference_motif,targets = bmp.downs
 # # # # #
 
 
-
+# # # # JAN 2020
 # calculate distance between cell types
 # based on a list of >1000 TFs
 # we will just compute euclidean dist and check if cell type annotations / dendrogram make sense.
 # compare to tabula muris paper, they have a dendrogram of cell types in Fig 5
 
+# 1. calculate distance between cell types
+# 2. Run the pipeline and get the motifs
+# 4. Calculate the distance between motifs and create a matrix
+# 5. Map the two matrices using the cell type ID
+# 6. Make a 2D plot dist_pathway vs dist_cell_types
 
 distMatCellTypes <- function(tabula){
   # get the TF names
@@ -144,5 +149,118 @@ distMatCellTypes <- function(tabula){
   }
   row.names(all_mat) = all_types
   colnames(all_mat) = tf.names
+
+
+
   return(all_mat)
+}
+
+runGeneList <-function(gene_list = wnt.genes){
+
+    result = runFullPipeline(tabula,input_matrix = sce.seurat[['RNA']]@data[gene_list,tabula$cell], gene.list = gene_list,control_type = 0,group_classes = 'cell_ontology_class')
+
+    result %>% filterNonExpressing() %>% kMeansOnMotifs(class = 'cell_ontology_class') -> result_full
+    #result_full %>% filter(n_expres>5) %>% makeAllPlots(this_pathway = "",k=50,class = 'cell_ontology_class')
+
+    return(result_full)
+}
+# result_full after running the pipeline
+# min_freq, minimum fraction of cells in a cell type expressin the motif to call it 'expressed'
+# min_expres, min fraction of genes in the pathway that have values > 0
+library(philentropy)
+distMatPathways <- function(result_full, gene_list = wnt.receptors, min_freq = 0.1, min_expres=0.2,dist_method='corr'){
+
+
+    result_full %>% filter(freq>=min_freq & n_expres/nchar(result_full$pathway_quant[1])>min_expres) -> high_freq_motifs
+
+
+    high_freq_matrix = do.call(rbind,lapply(lapply(high_freq_motifs$pathway_quant,str_split,'',simplify=T) ,as.numeric )  )
+
+
+    # let's name motifs with the cell type they appear in
+    # this way we can then calculate distance and compare with distance between cell types
+    row.names(high_freq_matrix)<-as.character(high_freq_motifs$cell_ontology_class)
+    colnames(high_freq_matrix)<-gene_list
+
+    if(dist_method =='corr'){
+    # this has names of cell types!
+    # and they could be duplicated
+    dist_pathway = 1-cor(t(high_freq_matrix))
+  }else if(dist_method=='euclidean'){
+
+    dist_pathway = distance(high_freq_matrix)
+    row.names(dist_pathway) = row.names(high_freq_matrix)
+    colnames(dist_pathway ) = row.names(high_freq_matrix)
+  }
+
+  return(dist_pathway)
+}
+
+compareDistances<-function(dist_pathway, dist_cell_type){
+
+  n_motifs = dim(dist_pathway)[1]
+  pathway_cell_types = row.names(dist_pathway)
+
+  all_pairs_dist_pathway = c()
+  all_pairs_dist_celltype = c()
+  c = 1
+
+
+  for(i in 1:(n_motifs-1 )){
+    # just the upper triangle matrix
+    for(j in (i+1):n_motifs ){
+      all_pairs_dist_pathway[c] = dist_pathway[i,j]
+      all_pairs_dist_celltype[c] = dist_cell_type[ pathway_cell_types[i]  , pathway_cell_types[j]  ]
+      c = c+1
+    }
+  }
+
+  return(list(all_pairs_dist_pathway,all_pairs_dist_celltype))
+}
+
+
+# # # # #
+# # # # #
+# Jan 8th 2020, RANDOM ensemble
+# GOAL: to create a null hypothesis for number of expected clusters
+# ideally the input is already sampled, so the matrix is the dimension of length(pathway) * repeats
+# this will speed up the computation and save memory crash
+# the list of genes is just to get the size of the pathway
+
+
+runRandomEmsemble <-function(list_genes = bmp.receptors,n_repeats = 100,input_matrix =c()){
+
+  result_list= list()
+  # the matrix is composed of a random list of genes, by the way it was constructed
+  # So here we just take the row.names which is already the random set
+  all_random_genes = row.names(input_matrix)
+  i = 1
+  # this is the fundamental N, which is the size of the original pathway (and therefore size of fake pathways)
+  n_path = length(list_genes)
+  for(i in 1:n_repeats){
+    print(paste('Running repeat', i, '...'))
+    gene_sublist = all_random_genes[  (n_path*(i-1)+1):(n_path*i)];
+    # we take the random pathways in sets of N, one by one and apply the pipeline
+    # subset the matrix with the current batch
+    input_sub_matrix = input_matrix[gene_sublist,];
+    # runFullPipeline, default parameters (No kmeans )
+    result = runFullPipeline(tabula= tabula, input_matrix = input_sub_matrix,gene.list =gene_sublist,group_classes = "seurat_clusters")
+    result_list[[i]] = result
+  }
+
+  # return a list of dataframes with profiles frequencies by cell type
+  return(result_list)
+}
+
+# next function, take the list from the previous function and perform clustering
+# We need the optimal number of clusters as the output of the following function
+BIC_optimization<-function(result_list){
+
+
+  quant_list = lapply(result_list,pipelineResToQuant)
+  #quant_list is a matrix with all the profiles, discretized (GMM k=4)
+  # they have different sizes, depending on the pathway (control, etc)
+  d_clust_list <- lapply(quant_list,Mclust, G=1:100)
+
+  return(d_clust_list)
 }
