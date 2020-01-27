@@ -28,7 +28,7 @@ res = foreach(i =0:2, .packages = c("dplyr","mixtools","ggplot2","stringr") ) %d
 gene_list = bmp.receptors
 expr_matrix = sce.seurat[['RNA']]@data[gene_list,]
 
-# outputs 3 objects: original matrix + 2 controls 
+# outputs 3 objects: original matrix + 2 controls
 res = foreach(i =0:2, .packages = c("dplyr","mixtools","ggplot2","stringr") ) %dopar%{
 
   tabula %>% select(cell,tissue,cell_ontology_class,seurat_clusters) %>%
@@ -67,3 +67,37 @@ plotHeatmapMotifs<-function(motifs_by_cluster_kmeans,min.pct = 0.1){
 tabula %>% select(cell,tissue,cell_ontology_class,seurat_clusters) %>%
   pipelineNov2019(gene.list = gene_list, expr_matrix = expr_matrix ,control = 0) %>%
     kMeansOnMotifs(class="seurat_clusters") -> motifs_by_cluster_kmeans
+
+# # # #
+# # # #
+# # CONTROL random genes
+
+# filters for weird non-expressing genes
+consider_rand = rowSums(sce.seurat[['RNA']]@data>low_lim_global)/dim(sce.seurat[['RNA']]@data)[2]
+consider_random_genes = consider_rand>0.2
+
+cl <- parallel::makeCluster(8)
+doParallel::registerDoParallel(cl)
+
+rand_lists = list()
+# prepare the data
+# make lists of genes
+# make a matrix that contains all of these genes to pass to the parallel for loop
+# goal: to run in parallel multiple lists of random genes
+n_rand = 100
+for(i in 1:n_rand ){
+  rand_lists[[i]] = sample(row.names(sce.seurat[['RNA']]@data)[consider_random_genes], length(notch.genes) )
+}
+all_rand = unique(unlist(rand_lists))
+input_matrix = sce.seurat[['RNA']]@data[all_rand,]
+
+
+
+
+res_rand = foreach(i =1:n_rand, .packages = c("dplyr","mixtools","ggplot2","stringr") ) %dopar%{
+    print( paste( "processing sample ",toString(i)))
+    gene_list = rand_lists[[i]]
+    tabula %>% select(cell,tissue,cell_ontology_class,seurat_clusters) %>%
+        runFullPipeline(input_matrix = input_matrix,gene.list = gene_list,control_type=0) -> motifs_by_cluster_control1
+
+}

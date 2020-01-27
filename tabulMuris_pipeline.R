@@ -21,7 +21,7 @@ bmp.receptors<-c( "Bmpr1a" ,"Bmpr1b" ,"Acvr1"  ,"Acvrl1" ,"Acvr1b" ,"Tgfbr1" ,"A
 # from James Dec 3rd
 # Frizzled receptors
 wnt.receptors = c( paste('Fzd',as.character(seq(1,10)),sep=""), 'Lrp5', 'Lrp6')
-#wnt.ligands = grep('Wnt.*',row.names(sce.seurat),value = T)
+wnt.ligands = grep('Wnt.*',row.names(tiss.norm),value = T)
 #wnt.genes = c(wnt.receptors, wnt.ligands)
 
 

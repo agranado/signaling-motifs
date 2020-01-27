@@ -264,3 +264,323 @@ BIC_optimization<-function(result_list){
 
   return(d_clust_list)
 }
+mClustOnRaw <- function(input_matrix,sample_size =1000,G = 1:100,modelNames = c('VEV')){
+
+  res = mclust::Mclust(t(input_matrix[,sample(1:dim(input_matrix)[2],sample_size)]),G = G,modelNames = modelNames)
+  return(res)
+}
+
+randomSameStats<-function(gene_list = wnt.receptors){
+  path_means = all_means[gene_list];
+  path_vars = all_vars[gene_list]
+  s = 0.1
+  rand_set = c()
+  for(i in 1:length(gene_list)){
+
+  same_means = which(all_means>=path_means[i]-s & all_means<=path_means[i]+s)
+  same_vars = which(all_vars>=path_vars[i]-s & all_vars<=path_vars[i]+s)
+  same_stats = same_means[which(same_means %in% same_vars)]
+  rand_set[i]=sample(names(same_stats),1)
+  }
+ return(rand_set)
+}
+
+# Jan 14th optimize BIC first for each gene,
+# then get words (discrete data)
+# cluster again and compare with random pathways
+
+mClustOnRawGene<-function(gene.name,input.matrix = c()){
+
+    bb = Mclust(input.matrix[gene.name, ] , G= 1:20)
+}
+
+
+
+
+# # # # # # # Jan 14th 2020
+# clustering pathways based on average cluster expression
+# Do we see a lower dimension compared with random sets of genes
+# NOTE: BIC did not work. Mclust gives really weird results
+# 80 global clusters from Seurat
+
+wssKmeans<-function(input_matrix,k.max= 50 ){
+  #set.seed(123)
+  # Compute and plot wss for k = 2 to k = 15.
+
+
+  wss <- sapply(1:k.max,
+                function(k){kmeans(input_matrix, k, nstart=50,iter.max = 30 )$tot.withinss})
+  return(wss)
+  # plot(1:k.max, wss,
+  #      type="b", pch = 19, frame = FALSE,
+  #      xlab="Number of clusters K",
+  #      ylab="Total within-clusters sum of squares")
+
+}
+
+
+silhoutteKmeans<-function(input_matrix,k.max){
+  wss <- sapply(2:k.max,
+                function(k){res = kmeans(input_matrix, k, nstart=50,iter.max = 30 );ss =silhouette(res$cluster,dist(input_matrix));return(mean(ss[,3]))})
+  return(wss)
+}
+# NOTE: we can modify this function to compute the fraction of expressing cells
+# this function retrieves data from the default assay
+# in this case the default data slot is SCT@data, which is corrected counts by negative binomial regression
+# see the seurat vignette for more details
+
+nbClustKmeans <- function(input_matrix,k.max= 70){
+
+  #aa = scale(avg.matrix(tiss.norm, genes.list = all_pathways[[1]]))
+  res.nbclust<-NbClust(input_matrix,distance = 'euclidean',min.nc = 2,max.nc = k.max,method ='kmeans',index='sdindex')
+  # a<-fviz_nbclust(res.nbclust)
+  # x11();
+  # plot( as.numeric(levels(a$data$Number_clusters)[as.numeric(a$data$Number_clusters)] ) ,a$data$freq, xlab ='N clusters', ylab ="Freq among all indices",type = "l")
+
+  #return(res.nbclust$All.index[,'Dindex'])
+  return(res.nbclust$All.index)
+
+}
+
+
+gapStatKmeans<-function(input_matrix,k.max = 70,B=100){
+
+
+  g_scale = clusGap(input_matrix,kmeans,K.max = k.max,B = B)
+  gap = g_scale$Tab[,'gap']
+  return(gap)
+}
+
+
+# simple PCA of the input matrix
+pcaStatKmeans<-function(input_matrix){
+
+  res.pca<-prcomp(input_matrix)
+  #return variance as % explained
+  return( (res.pca$sdev)^2/sum((res.pca$sdev)^2)*100)
+
+}
+
+
+
+
+# SCT@counts cotains corrected counts for library size such that
+# SCT@data = log(1+SCT@counts) // since the library size normalization was donde during the inverse regression
+avg.matrix<-function(seurat.obj,genes.list,by= "seurat_clusters",upper.case = T){
+  cellnames = rownames(seurat.obj@meta.data)
+  genenames = rownames(seurat.obj)
+
+
+  if(upper.case) genes.list = toupper(genes.list)
+
+  genes.list = genenames[which(toupper(genenames) %in% toupper(genes.list))]
+
+  data.to.plot = FetchData(seurat.obj, c(genes.list, by))
+  data.to.plot$cell = rownames(data.to.plot)
+  #we added 2 new fields, get the gene names by excluding them (or get the before)...
+  genes.plot = colnames(data.to.plot)[1:(length(colnames(data.to.plot))-2)]
+
+  data.to.plot %>% gather( key =genes.plot, c(genes.plot), value = expression) -> data.to.plot
+
+   data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression)) %>% spread(genes.plot,avg.exp) -> mean.expr.matrix
+  mean.mat =as.matrix( mean.expr.matrix[,-1]); rownames(mean.mat)<-unlist(mean.expr.matrix[,by])
+
+#data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression),sd.exp = sd(expression))
+
+  return(mean.mat)
+}
+
+# # # # # #
+# BATCH run for comparing with control data
+
+wssPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F){
+  # before doing kmeans we can scale the input matrix by column such that each gene has mean = 0, sd = 1
+  # this prevent a single highly-expressed genes to dominate the clustering and might increase signal from lowly expressed genes.
+  # this, however, might create false positives
+
+
+      n_reps = 100;max.k = 70
+
+      wss = matrix(0,n_reps, max.k )
+
+      #100 times for a random ensemble of genes with the same mean and var as the real pathway
+      for(i in 1:n_reps){
+
+          repeat{
+          aa = randomSameStats(gene_list = this_pathway)
+          if(length(unique(aa))==length(this_pathway)) break
+          }
+            #print(aa)
+          avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")
+          wss[i,]= wssKmeans(avg_matrix,k.max = max.k)
+      }
+
+      # do it for the real pathway
+      #avg_matrix = ifelse(scale_matrix, scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")),avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters"))
+      avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")
+
+      aa =wssKmeans(avg_matrix,k.max = max.k)
+
+
+    #  matplot(t(wss),type ='l',col = alpha('gray',0.4),ylab = "Total within-clusters sum of squares",xlab ="N clusters",xlim = c(0,50),main =pathways[[p]],cex.lab = 2, cex.axis =2 );
+    #  lines(aa,col ="red",lwd = 2)
+
+      return(list(wss,aa))
+
+}
+
+silhPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F){
+
+
+
+      n_reps = 100;max.k = 70
+
+      wss = matrix(0,n_reps, max.k-1)
+
+      #100 times for a random ensemble of genes with the same mean and var as the real pathway
+      for(i in 1:n_reps){
+          repeat{
+          aa = randomSameStats(gene_list = this_pathway)
+          if(length(unique(aa))==length(this_pathway)) break
+          }
+            #print(aa)
+          avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")
+          #this function goes from 2:max.k
+          wss[i,]= silhoutteKmeans(avg_matrix,k.max = max.k)
+      }
+
+      # do it for the real pathway
+        avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")
+      aa =silhoutteKmeans(avg_matrix,k.max = max.k)
+
+
+      #matplot(t(wss),type ='l',col = alpha('gray',0.4),ylab = "Silhouette score",xlab ="N clusters",xlim = c(0,50),main =pathways[[p]],cex.lab = 2, cex.axis =2 );
+      #lines(aa,col ="red",lwd = 2)
+
+      return(list(wss,aa))
+
+}
+
+nbclustPathwayControl <-function(this_pathway = bmp.receptors, scale_matrix = F,n_reps = 100){
+
+
+
+        #n_reps = 100;
+        max.k = 70
+
+        wss = matrix(0,n_reps, max.k-1)
+
+        #100 times for a random ensemble of genes with the same mean and var as the real pathway
+        for(i in 1:n_reps){
+
+            aa = randomSameStats(gene_list = this_pathway)
+          #  print(aa)
+            avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")
+            #this function goes from 2:max.k
+            wss[i,]= nbClustKmeans(avg_matrix,k.max = max.k)
+        }
+
+        # do it for the real pathway
+          avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")
+        aa =nbClustKmeans(avg_matrix,k.max = max.k)
+
+
+        #matplot(t(wss),type ='l',col = alpha('gray',0.4),ylab = "Silhouette score",xlab ="N clusters",xlim = c(0,50),main =pathways[[p]],cex.lab = 2, cex.axis =2 );
+        #lines(aa,col ="red",lwd = 2)
+
+        return(list(wss,aa))
+
+}
+
+
+gapPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F,n_reps = 100,B = 100){
+  # before doing kmeans we can scale the input matrix by column such that each gene has mean = 0, sd = 1
+  # this prevent a single highly-expressed genes to dominate the clustering and might increase signal from lowly expressed genes.
+  # this, however, might create false positives
+
+
+      #n_reps = 100;
+      max.k = 70
+
+      wss = matrix(0,n_reps, max.k )
+
+      #100 times for a random ensemble of genes with the same mean and var as the real pathway
+      for(i in 1:n_reps){
+
+          aa = randomSameStats(gene_list = this_pathway)
+          #print(aa)
+          avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")
+          wss[i,]= gapStatKmeans(avg_matrix,k.max = max.k,B=150)
+      }
+
+      # do it for the real pathway
+      #avg_matrix = ifelse(scale_matrix, scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")),avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters"))
+      avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")
+
+      aa =gapStatKmeans(avg_matrix,k.max = max.k,B = B)
+
+
+    #  matplot(t(wss),type ='l',col = alpha('gray',0.4),ylab = "Total within-clusters sum of squares",xlab ="N clusters",xlim = c(0,50),main =pathways[[p]],cex.lab = 2, cex.axis =2 );
+    #  lines(aa,col ="red",lwd = 2)
+
+      return(list(wss,aa))
+
+}
+
+pcaPathwayControl <-function( this_pathway = bmp.receptors, scale_matrix = F, n_reps = 100){
+
+
+
+        wss = matrix(0,n_reps, length(this_pathway) )
+
+        #100 times for a random ensemble of genes with the same mean and var as the real pathway
+        for(i in 1:n_reps){
+
+            repeat{
+            aa = randomSameStats(gene_list = this_pathway)
+            if(length(unique(aa))==length(this_pathway)) break
+            }
+            #print(aa)
+            avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")
+            wss[i,]= pcaStatKmeans(avg_matrix)
+
+        }
+
+        # do it for the real pathway
+        #avg_matrix = ifelse(scale_matrix, scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")),avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters"))
+        avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")
+
+        aa =pcaStatKmeans(avg_matrix)
+
+
+      #  matplot(t(wss),type ='l',col = alpha('gray',0.4),ylab = "Total within-clusters sum of squares",xlab ="N clusters",xlim = c(0,50),main =pathways[[p]],cex.lab = 2, cex.axis =2 );
+      #  lines(aa,col ="red",lwd = 2)
+
+        return(list(wss,aa))
+
+
+}
+
+# # # # # # #
+# PLOTTITNG
+
+pathway_color = c("black" ,"blue",  "red"   ,"cyan" )
+pathway_color2 = c("deeppink3","darkolivegreen3","cyan3")
+plotWssPathway<-function(result_list,p, x_lims = c(0,50),y_lab="Tot within-clust sum of squares", x_lab ="N clusters",
+                      alpha_val = 0.4, plot_diff = F,main_pathways = pathways,path_colors = pathway_color){
+        wss= result_list[[p]][[1]]
+        aa = result_list[[p]][[2]]
+        if(plot_diff == F){
+          matplot(t(wss),type ='l',col = alpha('gray',alpha_val),ylab = y_lab , xlab = x_lab ,xlim = x_lims,main =main_pathways[[p]],cex.lab = 1.5, cex.axis =1.5 );
+          lines(aa,col =path_colors[[p]],lwd = 2.5)
+        }
+
+}
+
+
+plotPCAPathway<-function(results_pca,p, x_lims = c(0,50),y_lab="% Explained", x_lab ="n PCs", alpha_val = 0.4,
+                      plot_diff = F,main_pathways = pathways,path_colors = pathway_color){
+
+  matplot(apply(results_pca[[p]][[1]],1,cumsum),type = 'l',col = alpha('gray',alpha_val),ylab = y_lab ,xlab =x_lab , xlim = x_lims,main =main_pathways[[p]],cex.lab = 1.5, cex.axis =1.5 )
+  lines(cumsum(results_pca[[p]][[2]]),col =path_colors[[p]],lwd = 2.5)
+}
