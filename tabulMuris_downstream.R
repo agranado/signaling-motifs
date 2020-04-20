@@ -2,7 +2,7 @@
 # After meeting Jordi, Dec 17th 2019
 
 # Alejandro Granados
-source("tabulMuris_pipeline.R")
+#source("tabulMuris_pipeline.R")
 
 
 
@@ -167,7 +167,7 @@ runGeneList <-function(gene_list = wnt.genes){
 # result_full after running the pipeline
 # min_freq, minimum fraction of cells in a cell type expressin the motif to call it 'expressed'
 # min_expres, min fraction of genes in the pathway that have values > 0
-library(philentropy)
+#library(philentropy)
 distMatPathways <- function(result_full, gene_list = wnt.receptors, min_freq = 0.1, min_expres=0.2,dist_method='corr'){
 
 
