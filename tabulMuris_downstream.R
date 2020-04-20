@@ -276,11 +276,21 @@ randomSameStats<-function(gene_list = wnt.receptors){
   s = 0.1
   rand_set = c()
   for(i in 1:length(gene_list)){
+    # For low-expressed genes, this works
+    if(path_means[i]<= 0.3){
+      s = 0.05
+    }else if(path_means[i]<=1.4){
+      s = 0.1
+    # For highly-expresed genes, there are not too many option to sample from
+    # and 0.1 makes the range too narrow. So we use a range proportional to the mean of that gene
+    }else{
+      s = 0.2*path_means[i]
+    }
 
-  same_means = which(all_means>=path_means[i]-s & all_means<=path_means[i]+s)
-  same_vars = which(all_vars>=path_vars[i]-s & all_vars<=path_vars[i]+s)
-  same_stats = same_means[which(same_means %in% same_vars)]
-  rand_set[i]=sample(names(same_stats),1)
+    same_means = which(all_means>=path_means[i]-s & all_means<=path_means[i]+s)
+    same_vars = which(all_vars>=path_vars[i]-s & all_vars<=path_vars[i]+s)
+    same_stats = same_means[which(same_means %in% same_vars)]
+    rand_set[i]=sample(names(same_stats),1)
   }
  return(rand_set)
 }
@@ -362,7 +372,35 @@ pcaStatKmeans<-function(input_matrix){
 }
 
 
+avg.matrix2 <- function(seurat.obj, genes.list, by ="cell_type", upper.case = F){
+  cellnames = rownames(seurat.obj@meta.data)
+  genenames = rownames(seurat.obj)
 
+
+  if(upper.case) genes.list = toupper(genes.list)
+
+  data.to.plot = FetchData(seurat.obj, c(genes.list, 'seurat_clusters','cell_ontology_class','tissue'))
+  data.to.plot$cell = rownames(data.to.plot)
+
+  if(by=="cell_type"){
+    data.to.plot %>%
+      filter(!is.na(cell_ontology_class) & !is.na(tissue)) %>%
+      mutate(cell_type = paste(cell_ontology_class," (",tissue,")",sep="")) -> data.to.plot
+    }
+
+
+    genes.plot = genes.list[which(genes.list %in% colnames(data.to.plot))]
+
+    data.to.plot %>% gather( key =genes.plot, c(genes.plot), value = expression) -> data.to.plot
+
+    data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>%
+    dplyr::summarize(avg.exp = mean(expression)) %>%
+    spread(genes.plot,avg.exp) -> mean.expr.matrix
+
+   mean.mat =as.matrix( mean.expr.matrix[,-1]); rownames(mean.mat)<-unlist(mean.expr.matrix[,by])
+
+   return(mean.mat)
+}
 
 # SCT@counts cotains corrected counts for library size such that
 # SCT@data = log(1+SCT@counts) // since the library size normalization was donde during the inverse regression
@@ -385,7 +423,7 @@ avg.matrix<-function(seurat.obj,genes.list,by= "seurat_clusters",upper.case = T)
    data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression)) %>% spread(genes.plot,avg.exp) -> mean.expr.matrix
   mean.mat =as.matrix( mean.expr.matrix[,-1]); rownames(mean.mat)<-unlist(mean.expr.matrix[,by])
 
-#data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression),sd.exp = sd(expression))
+  #data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression),sd.exp = sd(expression))
 
   return(mean.mat)
 }
@@ -429,11 +467,14 @@ wssPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F){
 
 }
 
-silhPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F){
+silhPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F,max.k = 70,
+      subset =F, which.clusters = c){
 
+      if(subset){
+        max.k = sum(which.clusters)-10
+      }
 
-
-      n_reps = 100;max.k = 70
+      n_reps = 200;#max.k = 70
 
       wss = matrix(0,n_reps, max.k-1)
 
@@ -446,12 +487,18 @@ silhPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F){
             #print(aa)
           avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = aa, by="seurat_clusters")
           #this function goes from 2:max.k
+          if(subset){
+            avg_matrix = avg_matrix[which.clusters, ]
+          }
           wss[i,]= silhoutteKmeans(avg_matrix,k.max = max.k)
       }
 
       # do it for the real pathway
         avg_matrix =  if(scale_matrix) scale(avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")) else  avg.matrix(tiss.norm,genes.list = this_pathway, by="seurat_clusters")
-      aa =silhoutteKmeans(avg_matrix,k.max = max.k)
+        if(subset){
+          avg_matrix = avg_matrix[which.clusters, ]
+        }
+        aa =silhoutteKmeans(avg_matrix,k.max = max.k)
 
 
       #matplot(t(wss),type ='l',col = alpha('gray',0.4),ylab = "Silhouette score",xlab ="N clusters",xlim = c(0,50),main =pathways[[p]],cex.lab = 2, cex.axis =2 );
@@ -461,7 +508,7 @@ silhPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F){
 
 }
 
-nbclustPathwayControl <-function(this_pathway = bmp.receptors, scale_matrix = F,n_reps = 100){
+  nbclustPathwayControl <-function(this_pathway = bmp.receptors, scale_matrix = F,n_reps = 100){
 
 
 
@@ -583,4 +630,80 @@ plotPCAPathway<-function(results_pca,p, x_lims = c(0,50),y_lab="% Explained", x_
 
   matplot(apply(results_pca[[p]][[1]],1,cumsum),type = 'l',col = alpha('gray',alpha_val),ylab = y_lab ,xlab =x_lab , xlim = x_lims,main =main_pathways[[p]],cex.lab = 1.5, cex.axis =1.5 )
   lines(cumsum(results_pca[[p]][[2]]),col =path_colors[[p]],lwd = 2.5)
+}
+
+# Jan 2020 using ggplot for multiple pathways
+ggplotPathway<-function(results,type = 'silh'){
+
+  pathway.data = results[[2]]
+  rand.ensemble = results[[1]]
+
+
+  if(type =='silh'){
+    low.lim = 2
+    high.lim = length(pathway.data)+1
+    score.type ="Silhouette"
+    legend.pos = 'none'
+  }else if(type =="wss"){
+    low.lim = 1
+    high.lim = length(pathway.data)
+    score.type = "WSS"
+    legend.pos = 'none'
+  }else if(type =="pca"){
+    low.lim = 1
+    # number of principal components
+    high.lim = length(pathway.data)
+
+    rand.ensemble = t(apply(results[[1]],1,cumsum))
+    pathway.data = cumsum(pathway.data)
+    score.type = "PCA"
+    legend.pos = c(0.7,0.2 )
+  }
+
+  #repeats
+  row.names(rand.ensemble)<-as.character(1:dim(rand.ensemble)[1])
+  # K
+  colnames(rand.ensemble)<-as.character(low.lim:high.lim)
+
+  aa<-as.data.frame(rand.ensemble)
+  bb= data.frame( k = low.lim:high.lim, m_score = pathway.data,sd_score = rep(0,length(pathway.data)),data = rep("Pathway",length(pathway.data)))
+
+  control.df<-gather(aa, "k","score") %>% group_by(k) %>%
+    summarise(m_score = mean(score),sd_score = sd(score)) %>% mutate(k = as.numeric(k)) %>%
+      mutate(data = rep("Control",length(pathway.data)))
+
+  control.df %>% rbind(bb) %>% ggplot(aes(x = k, y = m_score, color =data)) +
+    geom_ribbon(data=control.df, aes(ymin = m_score - sd_score, ymax=m_score + sd_score),alpha = 0.2,color =NA) +
+      geom_line() + scale_colour_manual(values=c("black", "deeppink3")) + theme(text =element_text(size =20)) +
+        xlab("N clusters") + ylab(paste("Clustering Score (",score.type, ")",sep="")) +  theme(legend.position= legend.pos) -> p
+
+  if(type=="wss"){
+    p = p +   scale_y_continuous(trans='log10') +coord_cartesian(ylim=c(100,1000),xlim = c(2,20))
+  }else if(type=="silh"){
+    p = p #+ coord_cartesian(ylim=c(0.05,0.4))
+  }
+  return(p)
+}
+
+ggplotWithHeatmap<-function(list_results, i, names = mouse.pathway.names$Pathway.Name, genes =all_pathways_bank){
+
+  results_silh  = list_results[[1]][[i]]
+  results_wss =   list_results[[2]][[i]]
+  #results_pca =   list_results[[3]][[i]]
+
+
+  #p1 =  ggplotPathway(results_pca,type = "pca")
+  p1 = ggplotPathway(results_silh,type = "silh")
+  p2 =  ggplotPathway(results_silh,type = "silh")
+  p3 =  ggplotPathway(results_wss,type = "wss")
+
+
+  mat = avg.matrix(tiss.norm, genes[[i]],by="seurat_clusters")
+
+  p = pheatmap(mat)
+
+  lay =rbind(c(1,1,2),
+             c(1,1,3),
+             c(1,1,4))
+  p = grid.arrange(grobs = list(p[[4]],p1,p2,p3), layout_matrix = lay, top =textGrob(names[i],gp=gpar(fontsize=20,font=3)))
 }

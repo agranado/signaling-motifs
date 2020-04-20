@@ -36,9 +36,15 @@ bmp.receptors<-c( "Bmpr1a" ,"Bmpr1b" ,"Acvr1"  ,"Acvrl1" ,"Acvr1b" ,"Tgfbr1" ,"A
 # Main Functions:
 #
 
-load.PanglaoDB<-function(input_file = "", min_colSums = 3, max_colSums = 6, min.percent = 0.05, max_rowSums = 6,
-                            k = 10, data_type = "10x", plot.all = T, user_matrix = F,user_defined_matrix = c()){
+filter_MT<-function(input_matrix, pattern = "mt"){
 
+  
+  return(input_matrix)
+}
+
+load.PanglaoDB<-function(input_file = "", min_colSums = 3, max_colSums = 6, min.percent = 0.05,
+                    max_rowSums = 6, k = 10, data_type = "10x", plot.all = T,
+                      user_matrix = F,user_defined_matrix = c(), panglao = T, filter_mt = T){
 
   #Normally we want to use this function to load UMI / RPKM data from PanglaoDB
   #However, the function also performs basic filtering, so we can use it with other source data
@@ -79,19 +85,20 @@ load.PanglaoDB<-function(input_file = "", min_colSums = 3, max_colSums = 6, min.
     hist(log10(Matrix::colSums(sm2_filtered)), main = "Reads per cell (filtered)")
   }
   #extract names from Panglao format:
-  gene.names = do.call(rbind,strsplit(row.names(sm2_filtered),"_"))[,1]
-  ensembl.names = do.call(rbind,strsplit(row.names(sm2_filtered),"_"))[,2] #second part of the string contains this name
-  ensembl.names<-do.call(rbind,strsplit(ensembl.names,"\\."))[,1]
+  if(panglao ==T){
+    gene.names = do.call(rbind,strsplit(row.names(sm2_filtered),"_"))[,1]
+    ensembl.names = do.call(rbind,strsplit(row.names(sm2_filtered),"_"))[,2] #second part of the string contains this name
+    ensembl.names<-do.call(rbind,strsplit(ensembl.names,"\\."))[,1]
 
-  row.names(sm2_filtered)<-gene.names
-
+    row.names(sm2_filtered)<-gene.names
+  }
 
 
   return(sm2_filtered)
 }
 #CPU time, Mac 8min single core for pancreas.files[1]
 
-normalizeSCRAN<-function(sm2_filtered){
+normalizeSCRAN<-function(sm2_filtered, return_seurat = F){
     # SCRAN normalization
     # We need a SCE object so we will convert our matrix to that,
     # For MAGIC, we need a UMI matrix so we will convert to Seurat so
@@ -106,12 +113,16 @@ normalizeSCRAN<-function(sm2_filtered){
     sce<-scater::normalize(sce)
 
     #let's convert to Seurat:
+
     sce.seurat <- as.Seurat(sce)
 
-    norm_count_matrix = as.matrix(sce.seurat[['RNA']]@data )
+    if(return_seurat){
+      return(sce.seurat)
+    }else{
+      norm_count_matrix = as.matrix(sce.seurat[['RNA']]@data )
 
-    return(norm_count_matrix)
-
+      return(norm_count_matrix)
+    }
 }
 
 normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
@@ -139,7 +150,7 @@ normaliseAndImpute<-function(sm2_filtered = c(), k_magic = 10,plot.all = F){
     p1 = pheatmap(log2(1+subset_full),cluster_rows = F,show_colnames = F)
   }
   #MAGIC imputation
-  sce_magic  = Rmagic::magic(t(as.matrix(sce.seurat[['RNA']]@data )),k=k_magic,n.jobs =-1)
+  sce_magic  = Rmagic::magic(t(as.matrix(sce.seurat[['RNA']]@data )),knn=k_magic,n.jobs =-1)
   sce_magic_data = t(sce_magic$result)
   if(plot.all){
     p2 =pheatmap(sce_magic_data[which(gene.names %in% bmp.receptors),] ,cluster_rows = F,cutree_cols = 10,show_colnames = F)

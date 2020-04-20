@@ -10,6 +10,8 @@ library(ggplotify)
 library(tidyr)
 library(pheatmap)
 
+library(grid)
+library(cluster)
 
 
 # # # # # #
@@ -28,6 +30,14 @@ wnt.ligands = grep('Wnt.*',row.names(tiss.norm),value = T)
 
 bmp.downstream = c('Msx2','Gata3','Skil','Eif5a','Llgl1','Rela','Sesn2','Kdm6b','Smad6','Id1','Msx1','Serpine1','Ntrk3','Id2','Id4')
 
+
+
+
+
+firstup <- function(x) {
+  substr(x, 1, 1) <- toupper(substr(x, 1, 1))
+  x
+}
 
 
 
@@ -258,7 +268,7 @@ plotMotifDist<-function(this_tissue,tabula = tabula, class = "tissue",binwidth =
 # # # # # # # # # #
 # global meta data object:
 if(!exists("tabula")){
-  sce.seurat@meta.data %>% select(cell, tissue, cell_ontology_class, seurat_clusters) -> tabula
+  tiss.norm@meta.data %>% select(cell, tissue, cell_ontology_class, seurat_clusters) -> tabula
 }
 
 
