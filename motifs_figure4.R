@@ -53,7 +53,7 @@ spectrumClustering <- function(i =1 , test_pathways = c() , filter_datasets = c(
 	num_clust =length(unique(labels))
 	# Inspect with pheatmap (cor distance is not exactly the same as in Aff prop)
 
-	return(list(path_mat, labels, dist_mat))
+	return(list(path_mat, labels, dist_mat, res_spectrum))
 }
 
 test_pathways = c('Bmp', 'Notch', 'Wnt', 'Fgfr','Lpa', 'Srsf','Wnt_l','Bmp_l',
@@ -67,7 +67,12 @@ test_pathways = c('Bmp', 'Notch', 'Wnt', 'Fgfr','Lpa', 'Srsf','Wnt_l','Bmp_l',
 # Spec method parameter is 2 by default, though some pathways behave better with method 1 (default parameter in Spectrum function)
 # spec_methods array indicates, for each patwhay the preferred clustering method
 clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv', save_plot = T,
-                                plot_id = 'heatmap_Spectrum',   spec_methods_ = c(2,2,2,1,2,1,1,2,2,2,2), filter_data_string = 'Chan', cols_meta = 4){
+                                plot_id = 'heatmap_Spectrum',   spec_methods_ = c(2,2,2,1,2,1,1,2,2,2,2), filter_data_string = 'Chan', cols_meta = 4,
+                                use_manual_spectral = F, dist_methods = rep(0, length(test_pathways)),
+                                quantile_norm = F, k_spectral = rep(10,length(test_pathways)),
+                                return_list = F){
+  # return_list = F will return only the data.frame with the final labels for each cell type. DEFAULT
+  # return_list = T will return the ann.data.frame + expression_mat + dist_mat for each pathway
   all_labels = list()
   # Read the first file to extract basic information
   aa = read.csv(paste( test_pathways[1], file_id , sep=''))
@@ -79,6 +84,9 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
   filter_datasets <- datasets[chan]
 
 
+  all_dist_matrices = list() # For each pathway save the final distance matrix to return as a list
+  all_path_mat  = list() # For each pathway return the list of expression matrices
+
   if(save_plot)
     pdf(paste('plots/',plot_id, '.pdf',sep=''))
 
@@ -86,20 +94,123 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
 
       # this function call the loading function
       # And clusters the ACM from there. So this is where data is actually loaded:
+      # We need Spectrum for the distance matrix
       list_res = spectrumClustering(i, test_pathways, filter_datasets, spec_methods_, file_id, cols_meta )
       labels = list_res[[2]]
       path_mat = list_res[[1]]
-      dist_mat = list_res[[3]]
+      dist_mat = as.dist(list_res[[3]])
 
-      all_labels[[i]] = labels$label
-      num_clust = length(unique(labels$label))
+      # For manual spectral clustering we get the spectrum results object
+      spec_res = list_res[[4]]
+
+      num_spec = length(unique(labels$label))
 
 
-      if(save_plot)  # Save pdfs with clustering for each pathway
-        pheatmap(path_mat, annotation_row = labels,
-                 clustering_distance_rows = as.dist(dist_mat),
-                 cutree_rows = num_clust, show_rownames = F, fontsize =14, clustering_method = 'complete')
+      # Get labels from manual spectral clustering:
+      # Nov 12th: Add a new column with out manual spectral labels:
+      # Makes a heatmap with the count matrix annotated by a few different labels
+      # Manual clustering seems to give a better matrix that works well with ward.D2
+      # looks good visually
+	    res_manual = manualSpectral(A = spec_res$similarity_matrix,
+	                            labels = labels, k_spectral[i])
 
+	   # Compare the two clusterings using the count matrix
+	   # Distance comes from similarity matrix computed manually Q_t
+	   labels = res_manual[[1]] # updated data.frame with both spectrum and manual labels
+
+     Q_t = res_manual[[3]]
+     Q_dist = as.dist( max(max(Q_t)) -Q_t)
+
+     # Set the clustering algorithm for the final labels:
+     # Some pathways look better using the manual clustering and/or the Q_t distnace matrix
+     if(dist_methods[i]){ # manual matrix
+        clustering_method_heatmap = 'ward.D2'
+        # Se dist_mat to the manual distance matrx
+        dist_mat = Q_dist
+        all_labels[[i]] = labels$manual
+
+        num_clust = length(unique(labels$manual))
+
+     }else{ # Default: Spectrum
+        clustering_method_heatmap ='complete'
+        # keep default behaviour
+        all_labels[[i]] = labels$label
+        num_clust = length(unique(labels$label))
+     }
+     # Spectrum somehow screwes the random seed for the random number generator
+     # We can not use random number to set the seed because the random.seed is locked!
+     # This sets a new random seed using clock data (?) which is independent of the curret random seed
+     set.seed(NULL)
+     set.seed(round(runif(1,0,1)*65000))
+
+
+
+     #dist_mat = dist.cosine(path_mat)
+     # Make heatmap normalized by quantiles with a blue color scale for Fig 1
+      if(save_plot){  # Save pdfs with clustering for each pathway
+        blues_pal<-colorRampPalette(brewer.pal(n = 9, name = 'BuPu'))
+        # For visualization, we apply saturation such that 50% expression of Gapdh is the highest value
+        # This prevent visual artifacts where highly expressed genes bias the color palette range
+        path_mat[path_mat>0.5] = 0.5 # 50% of Gapdh since this is normalized data
+        # Nov 19th
+        # Before making the actual heatmap, we use pheatmap for h-clustering using the manual distance matrix  + ward.D2
+        p = pheatmap(path_mat, silent=T, clustering_distance_rows = dist_mat, clustering_method =clustering_method_heatmap )
+        # now cut the tree to get a third label set and save it on data.frame labels
+        labels$ward = treeClust(p, num_clust ) %>% as.character()
+        # NOTE: OVER WRITE the FINAL LABEL with the ward.D2 clustering from the distance matrix
+        all_labels[[i]] = labels$ward
+
+        # Make colors for all labels
+        # Make palette of distinct colors
+        cols_manual  = makeQualitativePal(length(labels$manual %>% unique()))
+        names(cols_manual) <- labels$manual %>% unique() %>% sort()
+        cols_spectrum = makeQualitativePal(length(labels$label %>% unique() ))
+        names(cols_spectrum) <- labels$label %>% unique()
+        # Since we are going to map this to the global clusters, let's choose colors in deterministic order
+        tail_colors = ifelse(i==2, T, F)
+
+        cols_ward = makeQualitativePal(length(labels$ward %>% unique() ), rand_order = F, tail_colors = tail_colors)
+        names(cols_ward) <- labels$ward %>% unique() %>%  sort()
+
+        col_annotation = list(manual = cols_manual, label = cols_spectrum, ward = cols_ward)
+
+        if(quantile_norm){
+
+
+            mat_breaks <- quantile_breaks(path_mat, n = 20)
+            p2  = pheatmap(
+                mat               = path_mat,
+                color             = blues_pal(length(mat_breaks) - 1),
+                cluster_cols      = F,
+                breaks            = mat_breaks,
+                border_color      = NA,
+                clustering_distance_rows = dist_mat,
+                show_rownames     = T,
+                drop_levels       = TRUE,
+                fontsize          =12,
+                annotation_row = labels,
+                annotation_colors = col_annotation,
+                cutree_rows = num_clust
+            )
+
+        # Normal heatmap (no scaling + default palette)
+        }else{
+          pheatmap(path_mat, annotation_row = labels,
+                   clustering_distance_rows = dist_mat,
+                   cutree_rows = num_clust, show_rownames = F, fontsize =14, clustering_method = clustering_method_heatmap,
+                    annotation_colors = col_annotation,border_color      = NA,drop_levels       = TRUE, cluster_cols      = F,
+                    color = blues_pal(20))
+
+
+
+      }
+    }
+
+     k_manual = length(unique(labels$manual))
+     print(paste('Pathway ', test_pathways[i], 'k_spec = ', toString(num_spec), ' k_manual = ', toString(k_manual) ))
+
+     all_dist_matrices[[i]] = dist_mat # For each pathway save the final distance matrix to return as a list
+     all_path_mat[[i]] = path_mat
 
   }
 
@@ -110,6 +221,35 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
   colnames(motif_labels) <- test_pathways
 
   return(motif_labels)
+}
+
+
+
+
+makeQualitativePal <- function(n, rand_order = T, skip = 0, tail_colors = F){
+
+  library(RColorBrewer)
+  qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+  col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+  #pie(rep(1,n), col=sample(col_vector, n))
+  if(rand_order ==T){
+    return(sample(col_vector, n))
+  }else{
+    # to add diversity we can get the last n colors of the array. Useful when plotting two pathways
+    if(tail_colors){
+        x_col = tail(col_vector,n)
+    }else{
+        x_col  =col_vector[(1+skip):(n+skip)]
+    }
+    return(x_col)
+  }
+}
+
+
+treeClust<-function(p,k){
+  #p2 = pheatmap(input_matrix, clustering_distance_rows = dist.cosine(input_mat), silent = T)
+  aa = as.hclust(p$tree_row)
+  return(cutree(aa, k))
 }
 
 
@@ -207,7 +347,70 @@ makeSankeyDiagram <- function(motif_labels, i, j){
 
 }
 
+# Manual clustering
+# Starts from the similarity matrix output by Spectrum and performs Spectral clustering using the normalized graph Laplacian
+# this is the output from the spectral clustering function
+# list[[1]] = data.frame with annotation and labels
+# list[[2]] = Spectrum object
+# list[[3]] = data matrix
+manualSpectral <- function(A=c(), labels =data.frame(),k_neigh = 10){
+ 	# A = spectral_hvg[[2]]$similarity_matrix
+	# spectral_hvg[[1]] %>% select(spectrum) -> labels
+	# 2. K-nearest similarity matrix: k = 10 as in the Spectrum paper
+  #k_neigh  = 7
+	for(i in 1:dim(A)[1]){
+		A[i,] -> neighbor_distances
+		neighbor_distances %>% sort(decreasing = T) -> sorted_neighbors
+		neighbor_distances[neighbor_distances<sorted_neighbors[k_neigh]] = 0
+		A[i,] = neighbor_distances /sum(neighbor_distances)
+		}
 
+	# 3. Graph difussion: 5 iterations
+	Q_t = A # Initial condition
+	I = diag(nrow =dim(A)[1], ncol = dim(A)[2]) # identity matrix
+	for(p in 2:5){
+		Q_t_minus = Q_t
+		Q_t = A %*% Q_t_minus %*% t(A) + I
+		}
+
+	# 4. Make Degree matrix D: row sums of Q_t
+	D = diag(rowSums(Q_t), nrow =dim(A)[1], ncol = dim(A)[2])
+
+	# 5. Normalized Graph Laplacian (taken from the web)
+	# [http://www.di.fc.ul.pt/~jpn/r/spectralclustering/spectralclustering.html](http://www.di.fc.ul.pt/~jpn/r/spectralclustering/spectralclustering.html)
+	"%^%" <- function(M, power)
+	with(eigen(M), vectors %*% (values^power * solve(vectors)))
+	# Normalized Laplacian
+	L <- (D %^% (-1/2)) %*% Q_t %*% (D %^% (-1/2)) # normalized Laplacian
+
+	# 6. Eigenvectors and values from Graph Laplacian
+	evL = eigen(L, symmetric = T)
+	evL$values %>% diff() -> eigen_diff
+
+	# 7. Identify optimal k of clusters based on eigen-gap
+	# Consider only the k top eigenvectors
+
+	k_opt = which.min(eigen_diff) + 1 # diff_ removes the first element
+	X = evL$vectors[,1:k_opt]
+	Y = matrix(0, dim(X)[1], dim(X)[2])
+	# Normalize eigen vectors
+	for(i in 1:dim(X)[1]){
+		for(j in 1:dim(X)[2]){
+			Y[i,j] = X[i,j] / sqrt( sum( X[i,]^2) )
+		}
+	}
+
+	# 8. Gaussian mixture on eigenvector space
+	gmm = GMM(Y, k_opt ,seed_mode = "random_subset", km_iter = 10,
+	em_iter = 10, verbose = F)
+	pr = predict_GMM(Y, gmm$centroids, gmm$covariance_matrices, gmm$weights)
+
+	# 9. Assign labels
+	labels$manual = pr$cluster_labels %>% as.character()
+	dist_mat = as.dist( max(max(Q_t)) - Q_t )
+
+	return(list(labels, dist_mat, Q_t) )
+}
 
 
 
@@ -420,3 +623,27 @@ makeAnnotatedHeatmap<-function(brain_lineage2, which.pathway =1 ){
 
  return(p1)
 }
+
+
+
+my_tissue_colors = list(Tissue = c(
+    'Aorta' = "#1f77b4",
+    'Bladder'  = "#aec7e8",
+    'Brain_Myeloid'=  "#ff7f0e",
+    'Brain_Non-Myeloid' = "#ffbb78",
+    'Diaphragm' = "#2ca02c",
+    'Fat' =  "#98df8a",
+   "Heart"  =            "#d62728",
+   "Kidney" =            "#ff9896",
+   "Large_Intestine"  =  "#9467bd",
+   "Limb_Muscle"  =      "#c5b0d5",
+   "Liver"        =      "#8c564b",
+   "Lung"         =       "#c49c94",
+   "Mammary_Gland"     = "#e377c2",
+   "Marrow"            = "#f7b6d2",
+   "Pancreas"          = "#7f7f7f",
+   "Skin"              = "#c7c7c7",
+   "Spleen"            = "#bcbd22",
+   "Thymus"            = "#dbdb8d",
+   "Tongue"            = "#17becf",
+   "Trachea"           = "#9edae5"))
