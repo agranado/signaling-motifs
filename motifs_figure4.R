@@ -31,18 +31,52 @@ load_path <- function(which_pathway = 'Bmp', which_datasets = c(), file_id  = '_
     return(aa)
 }
 
+# scaling function min.max per column
+min.maxNorm<-function(x){
+    maxs = apply(x,2,max)
+    mins = apply(x,2,min)
+    for(i in 1:dim(x)[2]){
+        x[,i] = (x[,i] - mins[i]) / (maxs[i] - mins[i])
+    }
+    return(x)
+
+}
+
 # Main function:
 # Perform spectral clustering using Spectrum and the average count matrix
 # Returns a list with the count matrix, the cluster labels and the distance matrix from Spectrum
 # filter_datsets is the list of dataset names that we will consider for the analysis
-spectrumClustering <- function(i =1 , test_pathways = c() , filter_datasets = c() , spec_methods = c() , files_id = '_raw_development.csv', n_meta = 4){
+spectrumClustering <- function(i =1 , test_pathways = c() , filter_datasets = c() , spec_methods = c() ,
+                      files_id = '_raw_development.csv', n_meta = 4, scale_type  = 0){
 	# Each pathway gets an optimal number of clusters
 	# WE need to compute this k from somewhere else (Spectrum maybe?)
 	path_mat <- load_path(test_pathways[i], filter_datasets, files_id , n_meta) %>% as.matrix()
 	# Spectrum needs row names
 	row.names(path_mat) <- 1:dim(path_mat)[1]
 
-	res_spectrum  = Spectrum(t(path_mat), maxk = 30, method = spec_methods[i], showres = F)
+  # Whether or not to scale or normalize data before Spectrum
+  # Under some clustering, some clusters might have 0 expression so let's filter for that first
+  path_mat = path_mat[,which(colSums(path_mat)>0)]
+
+  # This is the data matrix we feed into Spectrum
+  if(scale_type ==0){
+    x = t(path_mat)
+  }else if(scale_type ==1){
+    scaled_path_mat = scale(path_mat)
+    x = t(scaled_path_mat)
+
+  }else if(scale_type ==2 ){
+    scaled_path_mat =min.maxNorm(path_mat)
+    x = t(scaled_path_mat)
+
+  }
+
+  if(scale_type >0) path_mat = scaled_path_mat
+
+
+
+  # kernel = 'stsc' or 'density'
+	res_spectrum  = Spectrum(x, maxk = 30, method = spec_methods[i], showres = F, kerneltype ='stsc') # or kenerl = 'density'
 	# Make data.frame with all labels
 	labels = data.frame(label = res_spectrum$assignments %>% as.character())
 	row.names(labels) <- row.names(path_mat)
@@ -70,7 +104,8 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
                                 plot_id = 'heatmap_Spectrum',   spec_methods_ = c(2,2,2,1,2,1,1,2,2,2,2), filter_data_string = 'Chan', cols_meta = 4,
                                 use_manual_spectral = F, dist_methods = rep(0, length(test_pathways)),
                                 quantile_norm = F, k_spectral = rep(10,length(test_pathways)),
-                                return_list = F){
+                                return_list = F,saturate_val = 0.5, scale_data_type = 0,
+                                plot_cosine = F){
   # return_list = F will return only the data.frame with the final labels for each cell type. DEFAULT
   # return_list = T will return the ann.data.frame + expression_mat + dist_mat for each pathway
   all_labels = list()
@@ -88,14 +123,14 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
   all_path_mat  = list() # For each pathway return the list of expression matrices
 
   if(save_plot)
-    pdf(paste('plots/',plot_id, '.pdf',sep=''))
+    pdf(paste('plots/',plot_id, '.pdf',sep=''), width = 10, height =4)
 
   for( i in 1:length(test_pathways)){
 
       # this function call the loading function
       # And clusters the ACM from there. So this is where data is actually loaded:
       # We need Spectrum for the distance matrix
-      list_res = spectrumClustering(i, test_pathways, filter_datasets, spec_methods_, file_id, cols_meta )
+      list_res = spectrumClustering(i, test_pathways, filter_datasets, spec_methods_, file_id, cols_meta , scale_data_type)
       labels = list_res[[2]]
       path_mat = list_res[[1]]
       dist_mat = as.dist(list_res[[3]])
@@ -144,6 +179,11 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
      set.seed(round(runif(1,0,1)*65000))
 
 
+    # For plotting the heatmap and make comparisons
+    # Depending on the spectralClsutering function, this matrix could be normalized (min.max or scaled)
+    if (plot_cosine )
+      dist_mat = dist.cosine(path_mat)
+
 
      #dist_mat = dist.cosine(path_mat)
      # Make heatmap normalized by quantiles with a blue color scale for Fig 1
@@ -151,7 +191,7 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
         blues_pal<-colorRampPalette(brewer.pal(n = 9, name = 'BuPu'))
         # For visualization, we apply saturation such that 50% expression of Gapdh is the highest value
         # This prevent visual artifacts where highly expressed genes bias the color palette range
-        path_mat[path_mat>0.5] = 0.5 # 50% of Gapdh since this is normalized data
+        path_mat[path_mat>saturate_val] = saturate_val # 50% of Gapdh since this is normalized data
         # Nov 19th
         # Before making the actual heatmap, we use pheatmap for h-clustering using the manual distance matrix  + ward.D2
         p = pheatmap(path_mat, silent=T, clustering_distance_rows = dist_mat, clustering_method =clustering_method_heatmap )
@@ -167,9 +207,10 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
         cols_spectrum = makeQualitativePal(length(labels$label %>% unique() ))
         names(cols_spectrum) <- labels$label %>% unique()
         # Since we are going to map this to the global clusters, let's choose colors in deterministic order
-        tail_colors = ifelse(i==2, T, F)
+        tail_colors = ifelse(i==2, T, F) # For Notch
+        skip_colors = ifelse(i==3, 47,0) # For Wnt
 
-        cols_ward = makeQualitativePal(length(labels$ward %>% unique() ), rand_order = F, tail_colors = tail_colors)
+        cols_ward = makeQualitativePal(length(labels$ward %>% unique() ), rand_order = F, tail_colors = tail_colors, skip = skip_colors)
         names(cols_ward) <- labels$ward %>% unique() %>%  sort()
 
         col_annotation = list(manual = cols_manual, label = cols_spectrum, ward = cols_ward)
@@ -195,13 +236,25 @@ clusterAllPathways <- function( test_pathways, file_id = '_raw_development.csv',
 
         # Normal heatmap (no scaling + default palette)
         }else{
-          pheatmap(path_mat, annotation_row = labels,
-                   clustering_distance_rows = dist_mat,
-                   cutree_rows = num_clust, show_rownames = F, fontsize =14, clustering_method = clustering_method_heatmap,
-                    annotation_colors = col_annotation,border_color      = NA,drop_levels       = TRUE, cluster_cols      = F,
+          # Rotate heatmap for final figure in the paper
+          pheatmap(t(path_mat), annotation_col = labels %>% select(ward),
+                   clustering_distance_cols = dist_mat,
+                   cutree_cols = num_clust, show_colnames = T, fontsize =5,
+                   clustering_method = clustering_method_heatmap,
+                    annotation_colors = col_annotation,border_color      = NA,
+                    drop_levels       = TRUE, cluster_rows      = F,
                     color = blues_pal(20))
+          # Plot the distance matrix for inspection
+          plot_d = as.matrix(dist_mat)
+          plot_d = -(plot_d-max(max(plot_d)))
+          pheatmap(plot_d, annotation_row = labels %>% select(ward),
 
-
+                   cutree_rows = num_clust, show_colnames = T, fontsize =5,
+                   clustering_method = clustering_method_heatmap,
+                   clustering_distance_rows = dist_mat, clustering_distance_cols = dist_mat,
+                    annotation_colors = col_annotation,border_color      = NA,
+                    drop_levels       = TRUE,
+                    color = blues_pal(20))
 
       }
     }
@@ -252,6 +305,214 @@ treeClust<-function(p,k){
   return(cutree(aa, k))
 }
 
+# Main spectral clustering of Tabula Muris 3m (Nov 24th 2020)
+# Function to cluster markers
+# Other related plots to Fig 1 (I need to update the location of these functions )
+
+
+tf_list_file = 'Tabula_Senis_markers1kTF.csv'
+marker_list_file = 'Tabula_Senis_markersHVG.csv'
+# This function reads .csv files with markers for Tabula Muris
+# Performs spectral clustering using spectrum (with a specified k)
+# dist_methods 'cosine', 'euclidean', 'spectral'
+# method = 1, 2, 3 for Spectrum
+# filter_min: for a gene, sum over all cells.
+clusterMarkersTabula3m <- function(markers_file = 'Tabula_Senis_markersHVG.csv',
+                                   method = 1,
+                                   meta_cols = 5, make_plot = T,
+																	 merge_markers = F, pathway_ann = data.frame() ,
+																	 scale_data = T, filter_min = 0.7, spec_method = 1,
+																	 tree_clust_method ='ward.D2',
+																	 manual_k = 0, dist_method = 'cosine'){
+
+    if(!merge_markers){
+        markers_df = read.csv(file =markers_file, header = T)
+        markers_df %>% filter(dataset == '3m') -> markers_df
+        # From now on, everything is for Tabula Muris 3m mouse
+    }else{
+        # we take both datasets and make a single data.frame
+        # 3000 HVG + 1k TF
+        markers_df = read.csv(file =tf_list_file, header = T)
+        markers_df %>% filter(dataset == '3m') -> markers_df
+
+        markers_df2 = read.csv(file = marker_list_file, header = T)
+        markers_df2 %>% filter(dataset == '3m') -> markers_df2
+        # take the genes from the second data.frame and cbind
+        markers_mat = markers_df2[,1:(dim(markers_df2)[2]-meta_cols)]
+        markers_df = cbind(markers_mat, markers_df)
+    }
+
+
+    # 0. Count matrix
+    markers_mat = markers_df[,1:(dim(markers_df)[2]-meta_cols)]
+    # Note: a number of highly variable genes show actually no expression except a random cell
+    # which inflates the variance and contributes to clustering in a weird day
+    # even after normalization by Gapdh, z-score = 15 which is outrageous
+    which(colSums(markers_mat) >filter_min) -> filter_genes
+    markers_mat = markers_mat[,filter_genes]
+
+    markers_mat <-t(markers_mat)
+    colnames(markers_mat) <- 1:dim(markers_mat)[2]
+
+    meta = markers_df %>% select(Tissue, cell_ontology_class, cell_class, dataset)
+
+		#pathway annotation
+		if(dim(pathway_ann)[1]>0)
+	    meta = cbind(meta, pathway_ann)
+
+    # 1. Scale dataset
+		if(scale_data){
+	    data_mat = scale(t(markers_mat))
+		}else{
+			data_mat = t(markers_mat) # no scaling
+		}
+
+    row.names(data_mat) <- row.names(meta)
+
+    # 2. Run Spectrum
+    markers_spectral = Spectrum(markers_mat, method = spec_method, tunekernel = T, maxk = 40, showres = F)
+
+    # 3. Add labels to meta data_frame
+    meta$Tissue = meta$Tissue %>% as.character() # Otherwise factors screw everything
+    # Add Spectral labels
+    meta$spectrum = markers_spectral$assignments %>% as.character()
+
+    # Prepare colors and make heatmap
+    n_clust_markers =meta$spectrum %>% unique() %>% length()
+
+    # Use similarity matrix from spectrum to plot the heatmap
+    dist_mat = max(max(markers_spectral$similarity_matrix )) - markers_spectral$similarity_matrix
+
+    meta$cell_class = as.character(meta$cell_class)
+    # We have too many Fat Tissues, we can rename them
+    meta$cell_class[meta$cell_class =='Stromal ']='Stromal' # correct this type I made when saving the .csv
+    meta %>% mutate(tissue2 = ifelse(Tissue %in% c('GAT','MAT', 'BAT','SCAT'), 'Fat', Tissue)) -> meta2
+    meta2$Tissue = meta2$tissue2
+    row.names(meta2) <-meta2$seurat_clusters
+
+    # cell class colors
+    cell_class_cols = brewer.pal(length( meta2$cell_class %>% unique() ), 'Set3')
+    names(cell_class_cols) <- meta2$cell_class %>% unique()
+
+    # Add to the color list we had before
+    my_tissue_colors$cell_class = cell_class_cols
+
+		# PATHWAY MOTIF ANNOTATION Nov 20 2020
+		# If we have pathway annotation, we select those for the row colors
+    if(dim(pathway_ann)[1]>0){
+			ann_heatmap = meta2 %>% select( Bmp,Notch,Wnt,Tissue, cell_class)
+
+			cols_bmp  = makeQualitativePal(length(pathway_ann$Bmp %>% unique()), rand_order = F)
+      names(cols_bmp) <- pathway_ann$Bmp %>% unique() %>% sort()
+			# we start the palette from the next available color
+      cols_notch = makeQualitativePal(length(pathway_ann$Notch %>% unique() ),
+									 rand_order = F, skip = 0, tail_colors = T)
+      names(cols_notch) <- pathway_ann$Notch %>% unique() %>% sort()
+
+			cols_wnt = makeQualitativePal(length(pathway_ann$Wnt %>% unique() ),
+									 rand_order = F, skip = 47, tail_colors = F)
+      names(cols_wnt) <- pathway_ann$Wnt %>% unique() %>% sort()
+
+
+			my_tissue_colors$Bmp = cols_bmp
+			my_tissue_colors$Notch = cols_notch
+			my_tissue_colors$Wnt = cols_wnt
+
+    }else{
+			ann_heatmap = meta2 %>% select( Tissue, cell_class)
+		}
+
+		if(dist_method == 'cosine'){
+			heatmap_dist_mat = dist.cosine(data_mat)
+		}else if(dist_method =='spectral'){
+			heatmap_dist_mat = as.dist(dist_mat )
+		}else if(dist_method == 'euclidean'){
+			heatmap_dist_mat = dist(data_mat)
+		}
+
+    if(make_plot)
+        # 4. Plot heatmap: scaled data, spectral dist matrix, ward.D2
+        p = pheatmap(data_mat, annotation_row = ann_heatmap,
+                 clustering_distance_rows = heatmap_dist_mat,
+                 clustering_method = tree_clust_method, show_rownames = F,
+                 show_colnames = F, cutree_rows = ifelse(manual_k>0, manual_k,n_clust_markers),
+                 annotation_colors = my_tissue_colors,treeheight_col =0)
+
+
+		# Make aplot of distance boxplots in cell type space for each motif
+
+    # Return annotated data.frame
+    return(list(meta2 , markers_spectral, data_mat, p, my_tissue_colors))
+
+}
+
+
+# MOTIF diversity
+# Once we found the pathway classes, we compute the diversity (in transcriptome) of the
+# cell types using that particular motif
+# We do that using euclidean distance on the 3k marker genes from Seurat 
+diversityDistance <- function(spectral_hvg, k = 15, scale_data = T){
+	all_dists = data.frame()
+
+	for(p in c('Bmp', 'Notch','Wnt')){
+	    d_motifs = c()
+
+	    this_path = p
+			if(scale_data){
+		    cell_type_mat = spectral_hvg[[3]] %>% scale()
+			}else{
+				cell_type_mat = spectral_hvg[[3]]
+			}
+	    for(i in 1:length( unique(spectral_hvg[[1]][,this_path]) )){
+	        motif1_cell_types = cell_type_mat[spectral_hvg[[1]][,this_path]==i,]
+	        dist_motifs1 = dist(motif1_cell_types)
+
+	        d = as.matrix(dist_motifs1)
+	        all_dists = rbind(all_dists, data.frame(pathway =this_path , motif = as.character(i), dist_pairs =  d[upper.tri(d)], m = median( d[upper.tri(d)])))
+
+	    }
+	}
+
+	# Calculate distance within cell classes
+	markers_clust =cutree(spectral_hvg[[4]]$tree_row, k)
+	markers_clust_df = data.frame(seurat_clusters = as.character(names(markers_clust)), cell_class = markers_clust  )
+	control_dists = data.frame()
+	for(i in 1:length(unique(markers_clust_df$cell_class))){
+	    motif1_cell_types = cell_type_mat[markers_clust_df$cell_class==i,]
+			if(sum(markers_clust_df$cell_class==i)>1){
+				dist_motifs1 = dist(motif1_cell_types)
+		    d = as.matrix(dist_motifs1)
+				distr = d[upper.tri(d)]
+			}else{
+				d = 0
+			}
+	    control_dists = rbind(control_dists, data.frame(pathway= 'Cell_types',motif = i, dist_pairs =  distr , m = median( distr)))
+	}
+
+	#all_dists = rbind(all_dists, control_dists)
+	# Compute the quantiles for the expectation from cell types
+	control_dists$dist_pairs %>% summary() -> quantiles_cell_type
+
+	return(list(all_dists, quantiles_cell_type))
+
+}
+
+# Make box-plots Nov  24th
+# One for each motif colored by the same color-id from spectral clustering
+# Draw lines on the quantile range for the expected distribution of related cell types
+diveristyBoxPlot <-function(all_dists,this_path = 'Bmp', manual_colors = c() ){
+    all_dists %>% filter(pathway == this_path) %>% ggplot(aes(x = reorder(motif, m,FUN = median), y =dist_pairs, fill = motif)) + geom_boxplot(outlier.shape = NA) + geom_hline(yintercept=quantiles_cell_type[2], linetype="dashed", color = "red") + geom_hline(yintercept=quantiles_cell_type[5], linetype="dashed", color = "red") + theme_classic()  +  theme(text = element_text(size = 20)) -> p1
+    p1  = p1 + ylab('Distance between cell types (transcriptome)') + xlab('Pathway class') + ggtitle(this_path)
+
+    if(length(manual_colors)>0){
+        p1 = p1 + scale_fill_manual(values = manual_colors)
+    }
+
+    return(p1)
+}
+
+
+# PATHWAY correlations (this should be in Fig 3)
 
 # Takes the data frame (motif_labels) from the previous function (clusterAllPathways)
 # Makes a heatmap with the corresponding MI between all pairs of pathways
@@ -353,7 +614,7 @@ makeSankeyDiagram <- function(motif_labels, i, j){
 # list[[1]] = data.frame with annotation and labels
 # list[[2]] = Spectrum object
 # list[[3]] = data matrix
-manualSpectral <- function(A=c(), labels =data.frame(),k_neigh = 10){
+manualSpectral <- function(A=c(), labels =data.frame(),k_neigh = 10, n_graph_iter=5){
  	# A = spectral_hvg[[2]]$similarity_matrix
 	# spectral_hvg[[1]] %>% select(spectrum) -> labels
 	# 2. K-nearest similarity matrix: k = 10 as in the Spectrum paper
@@ -368,7 +629,7 @@ manualSpectral <- function(A=c(), labels =data.frame(),k_neigh = 10){
 	# 3. Graph difussion: 5 iterations
 	Q_t = A # Initial condition
 	I = diag(nrow =dim(A)[1], ncol = dim(A)[2]) # identity matrix
-	for(p in 2:5){
+	for(p in 2:n_graph_iter){
 		Q_t_minus = Q_t
 		Q_t = A %*% Q_t_minus %*% t(A) + I
 		}

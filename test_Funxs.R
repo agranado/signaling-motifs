@@ -366,3 +366,61 @@ exportSeuratPathways<-function(tiss.norm = c() , pathway_file = pathways_file, a
     return(export_df)
 
 }
+
+# Nov  21st
+# Most of the pipeline start in Seurat, from which we export a csv that is read into python for visualization and some processing
+# Ideally, I wanted to do the scpetral clustering in python but ended up doing it in R
+# So I exported .csv from python (with minor processing) and read them again into R which is not ideal
+# This function will export Seurat objects as pathway .csv with the final format that is read by the spectral clsutering pipeline
+# We are using the general format of developmental datasets (same as Niv)
+pathways_file_short = '/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/pathway_list2_oct2020_shortname.csv'
+file_export_processed = '/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/processed_profiles/'
+exportSeuratPathways_python<-function(tiss.norm = c() , pathway_file = pathways_file_short,
+                                      all_pathway_file_names = c() , cell_type_ann = data.frame()  , upper.case = F,
+                                      dataset_id = 'Adult_3m_Tabula'){
+
+    # Read the list of genes for the pathways of interest + splicing family(negative control)
+    all_pathways = read.table(pathway_file, sep=',', header = T, colClasses = 'character')
+
+    pathway_names = all_pathways$pathway %>% unique()
+
+    for(i in 1:length(pathway_names)){
+      # read this all pathwyas from the main .csv file guide
+      this_path = all_pathways %>% filter(pathway ==pathway_names[i])
+      expr.mat = avg.matrix(tiss.norm , this_path$gene, by='seurat_clusters', upper.case = upper.case)
+      if(upper.case)
+        colnames(expr.mat) <- firstup(tolower(colnames(expr.mat)))
+
+
+      #check for non present genes and fill with 0 matrix
+      not_present = this_path$gene[ !(this_path$gene %in% firstup(tolower(colnames(expr.mat)))) ]
+      not_present_zero = matrix(0, dim(expr.mat)[1], length(not_present))
+
+      colnames(not_present_zero) <-not_present
+      row.names(not_present_zero) <- row.names(expr.mat)
+
+      #bind both matrices
+      expr.mat = cbind(expr.mat , not_present_zero)
+
+      df=as.data.frame(expr.mat)
+      df$seurat_clusters = row.names(expr.mat)
+      # left join with metadata
+      # specific for each Seurat object
+      export_df = left_join(df, cell_type_ann %>% select(seurat_clusters, tissue, cell_type), by ='seurat_clusters')
+      export_df$dataset = dataset_id
+
+      # merge with housekeeping genes
+      # Average expression for house-keeping genes
+      # house_matrix = avg.matrix(tiss.norm, house_keeping, upper.case = T)
+      # if(upper.case)
+      #   colnames(house_matrix) <- firstup(tolower(colnames(house_matrix)))
+
+      # Left join with the pathway data before exporting
+      # house_df<- house_matrix %>% as.data.frame() %>% mutate(seurat_clusters =row.names(house_matrix))
+      # export_df <- export_df %>% left_join(house_df, by ='seurat_clusters')
+      write.csv(export_df %>% select(-seurat_clusters), file = paste(file_export_processed,pathway_names[i],'_adult_raw_SCRAN.csv' ,sep='') , row.names = F, quote =F)
+
+    }
+
+
+}
