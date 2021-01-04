@@ -428,6 +428,19 @@ avg.matrix<-function(seurat.obj,genes.list,by= "seurat_clusters",upper.case = T)
   return(mean.mat)
 }
 
+pct.matrix <- function(seurat.obj,genes.list,by='seurat_clusters'){
+
+  data.to.plot = FetchData(seurat.obj , c(genes.list, 'seurat_clusters','tissue','cell_ontology_class'))
+  data.to.plot$cell = rownames(data.to.plot)
+#we added 2 new fields, get the gene names by excluding them (or get the before)...
+  genes.plot = colnames(data.to.plot)[1:(length(colnames(data.to.plot))-4)]
+  # Original object is a matrix. NOT TIDY
+  # Here we make it tidy:
+  data.to.plot %>% gather( key =genes.plot, c(genes.plot), value = expression) -> data.to.plot
+
+  data.to.plot %>% group_by(seurat_clusters,genes.plot) %>%
+    summarise(pct.exp = sum(expression>0,na.rm = T)/n(), mean = mean(expression)) -> notch.tidy
+}
 # # # # # #
 # BATCH run for comparing with control data
 
@@ -508,7 +521,7 @@ silhPathwayControl<-function(this_pathway = bmp.receptors,scale_matrix = F,max.k
 
 }
 
-  nbclustPathwayControl <-function(this_pathway = bmp.receptors, scale_matrix = F,n_reps = 100){
+nbclustPathwayControl <-function(this_pathway = bmp.receptors, scale_matrix = F,n_reps = 100){
 
 
 

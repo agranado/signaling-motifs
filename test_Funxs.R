@@ -377,7 +377,7 @@ pathways_file_short = '/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_o
 file_export_processed = '/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/processed_profiles/'
 exportSeuratPathways_python<-function(tiss.norm = c() , pathway_file = pathways_file_short,
                                       all_pathway_file_names = c() , cell_type_ann = data.frame()  , upper.case = F,
-                                      dataset_id = 'Adult_3m_Tabula'){
+                                      dataset_id = 'Adult_3m_Tabula', write.file.id = '_adult_raw_SCRAN.csv' , type = 'average'){
 
     # Read the list of genes for the pathways of interest + splicing family(negative control)
     all_pathways = read.table(pathway_file, sep=',', header = T, colClasses = 'character')
@@ -387,7 +387,15 @@ exportSeuratPathways_python<-function(tiss.norm = c() , pathway_file = pathways_
     for(i in 1:length(pathway_names)){
       # read this all pathwyas from the main .csv file guide
       this_path = all_pathways %>% filter(pathway ==pathway_names[i])
-      expr.mat = avg.matrix(tiss.norm , this_path$gene, by='seurat_clusters', upper.case = upper.case)
+
+
+      if(type == 'average'){
+
+        expr.mat = avg.matrix(tiss.norm , this_path$gene, by='seurat_clusters', upper.case = upper.case)
+      }else if(type == 'pct'){
+        expr.mat = pct.exp.matrix(tiss.norm, this_path$gene, by ='seurat_clusters', upper.case = upper.case)
+      }
+
       if(upper.case)
         colnames(expr.mat) <- firstup(tolower(colnames(expr.mat)))
 
@@ -411,14 +419,15 @@ exportSeuratPathways_python<-function(tiss.norm = c() , pathway_file = pathways_
 
       # merge with housekeeping genes
       # Average expression for house-keeping genes
-      # house_matrix = avg.matrix(tiss.norm, house_keeping, upper.case = T)
-      # if(upper.case)
-      #   colnames(house_matrix) <- firstup(tolower(colnames(house_matrix)))
+       house_matrix = avg.matrix(tiss.norm, house_keeping, upper.case = upper.case)
+       if(upper.case)
+         colnames(house_matrix) <- firstup(tolower(colnames(house_matrix)))
 
       # Left join with the pathway data before exporting
-      # house_df<- house_matrix %>% as.data.frame() %>% mutate(seurat_clusters =row.names(house_matrix))
-      # export_df <- export_df %>% left_join(house_df, by ='seurat_clusters')
-      write.csv(export_df %>% select(-seurat_clusters), file = paste(file_export_processed,pathway_names[i],'_adult_raw_SCRAN.csv' ,sep='') , row.names = F, quote =F)
+       house_df<- house_matrix %>% as.data.frame() %>% mutate(seurat_clusters =row.names(house_matrix))
+       export_df <- export_df %>% left_join(house_df, by ='seurat_clusters')
+
+      write.csv(export_df %>% select(-seurat_clusters), file = paste(file_export_processed,pathway_names[i],write.file.id,sep='') , row.names = F, quote =F)
 
     }
 

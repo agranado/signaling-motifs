@@ -7,6 +7,9 @@ library(RColorBrewer)
 library(stylo )
 library(viridis)
 library(Seurat)
+library(ggplot2)
+library(Spectrum)
+library(ClusterR)
 
 
 a = brewer.pal(9,'Blues')
@@ -42,11 +45,92 @@ avg.matrix<-function(seurat.obj,genes.list,by= "seurat_clusters",upper.case = T,
   return(mean.mat)
 }
 
+# Normalization and Scaling
+
+# scaling function min.max per column
+min.maxNorm<-function(x){
+    maxs = apply(x,2,max)
+    mins = apply(x,2,min)
+    for(i in 1:dim(x)[2]){
+        x[,i] = (x[,i] - mins[i]) / (maxs[i] - mins[i])
+    }
+    return(x)
+
+}
+
+
+# qualitative palette
+
+
+makeQualitativePal <- function(n, rand_order = T, skip = 0, tail_colors = F){
+
+  library(RColorBrewer)
+  qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+  col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+  #pie(rep(1,n), col=sample(col_vector, n))
+  if(rand_order ==T){
+    return(sample(col_vector, n))
+  }else{
+    # to add diversity we can get the last n colors of the array. Useful when plotting two pathways
+    if(tail_colors){
+        x_col = tail(col_vector,n)
+    }else{
+        x_col  =col_vector[(1+skip):(n+skip)]
+    }
+    return(x_col)
+  }
+}
+
+
+# Color palette for Tabula Muris Adult
+# This palette includes colors for both 10x and FACS
+# It is based on the original tissue colors from the TM paper
+# Additional colors for tissues in 10x not present in FACS were added
+my_tissue_colors = list(Tissue = c(
+
+    'Bladder'  = "#aec7e8",
+    'Brain_Myeloid'=  "#ff7f0e",
+    'Brain_Non-Myeloid' = "#ffbb78",
+    'Diaphragm' = "#2ca02c",
+    'Fat' =  "#98df8a",
+    'BAT' =  "#98df8a",
+    'SCAT' =  "#98df8a",
+    'GAT' =  "#98df8a",
+    'MAT' =  "#98df8a",
+    "Heart_and_Aorta"  =            "#d62728",
+    'Heart' = "#d62728",
+    "Kidney" =            "#ff9896",
+    "Large_Intestine"  =  "#9467bd",
+    "Limb_Muscle"  =      "#c5b0d5",
+    "Liver"        =      "#8c564b",
+    "Lung"         =       "#c49c94",
+    "Mammary_Gland"     = "#e377c2",
+    "Marrow"            = "#f7b6d2",
+    "Pancreas"          = "#7f7f7f",
+    "Skin"              = "#c7c7c7",
+    "Spleen"            = "#bcbd22",
+    "Thymus"            = "#dbdb8d",
+    "Tongue"            = "#17becf",
+    "Trachea"           = "#9edae5",
+    'Skeletal' ="#D9D9D9" ,
+    'Muscle' = "#c5b0d5"
+        ))
+
 
 # Load the list of pathway genes
+#
+# pathways = read.csv('/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/pathway_list2_oct2020.csv', header = T, colClasses = 'character')
+#
+# i = 4
+# all_pathways = pathways$pathway %>% unique()
+# pathways %>% filter(pathway == all_pathways[i]) %>% select(gene) -> this_pathway
+#
+# #
 
-pathways = read.csv('/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/pathway_list2_oct2020.csv', header = T, colClasses = 'character')
+pathways_file_short = '/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/pathway_list2_oct2020_shortname.csv'
 
-i = 4
-all_pathways = pathways$pathway %>% unique() 
-pathways %>% filter(pathway == all_pathways[i]) %>% select(gene) -> this_pathway
+all_pathways = read.csv(pathways_file_short, header = T, colClasses = 'character')
+pathway_genes = all_pathways$gene
+# # Fix the order for ploting Fig 1
+# bmp_mat = read.csv('Bmp_adult_raw_SCRAN.csv',header =T )
+# bmp_mat %>% select(all_of(bmp.order), tissue, cell_type, dataset) %>% write.csv('Bmp_adult_raw_SCRAN.csv', quote = F, row.names = F)

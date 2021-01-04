@@ -30,11 +30,14 @@ nGenesDifferent<-function(res.list = list(),i = 1,j =2, p_val_low=10^-6,which.ge
         }
 
         # return N DGE scaled by log fold change
-        return(df %>% mutate(gene = row.names(df)) %>% filter(p_val_adj <= p_val_low) %>% summarize(d = sum(abs(avg_logFC))) ) %>% pull(d)
+        return(df %>% mutate(gene = row.names(df)) %>% filter(p_val_adj <= p_val_low) %>% summarize(d = sum(abs(avg_logFC)))  %>% pull(d) )
 
     }else{return(0)}
 
 }
+
+
+
 
 # Works with Wilcoxon (Seurat) Differential expression
 confusionMatrix<-function(res.list_ = list(), which.genes  = seven.receptors, clust_method1 = 'complete',  min_exp = 2,   k = 8){

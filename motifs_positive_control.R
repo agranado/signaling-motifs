@@ -42,17 +42,29 @@ addNoiseMotifs<-function(positive.matrix =c(), reference_matrix,scale_var = 10){
 
 # run it once
 # run multiple times with :  replicate(100, runEnsemblePositive(gene_matrix = mat.receptors, m = 5, scale_var = 10,type="pca" ))
-runEnsemblePositive <- function(gene_matrix = mat.receptors, m = 8 , scale_var = 10, type = "silh" ){
+runEnsemblePositive <- function(gene_matrix = mat.receptors, m = 8 , scale_var = 10, type = "silh",pos.control = "T" , max_k = 2*m){
 
-
-
+  # positive control :
+  # We sample N profiles out of k possible profiles.
+  # There we create a synthetic expression matrix that contains k motifs (by definition of Recurrence)
+  if(pos.control){
   chooseMotifs(gene_matrix,m = m) %>%
     addNoiseMotifs(reference_matrix = gene_matrix, scale_var = scale_var) -> test.mat
+  # The negative control involve randomization of the original matrix
+  # No motifs and no gene-gene correlations
+  # random data + choseMotifs() sill gives signal!
+  }else{
+    # We skip the step of choosing motifs, since we DONT want motifs for negative control
+    # We will randomize the original matrix and add the same amount of noise that we did on positive control
+    rand_gene_matrix <- apply(gene_matrix,2,sample)
+
+    addNoiseMotifs(positive.matrix = rand_gene_matrix, reference_matrix = gene_matrix, scale_var = scale_var) -> test.mat
+  }
 
     if(type=="silh"){
-      test.mat %>% silhoutteKmeans(k.max = m*2) -> x
+      test.mat %>% silhoutteKmeans(k.max = max_k) -> x
     }else if(type =="wss"){
-      test.mat %>% wssKmeans(k.max = m*2) -> x
+      test.mat %>% wssKmeans(k.max = max_k) -> x
     }else if(type =="pca"){
       test.mat %>% pcaStatKmeans() -> x
     }else if(type =="all"){
@@ -65,7 +77,7 @@ runEnsemblePositive <- function(gene_matrix = mat.receptors, m = 8 , scale_var =
   return(x)
 }
 
-makePlotEnsemble <-function(input_matrix, type ="silh"){
+makePlotEnsemble <-function(input_matrix, type ="silh", return_df = F, id ='control'){
 
 
    if(type =='silh'){
@@ -100,6 +112,37 @@ makePlotEnsemble <-function(input_matrix, type ="silh"){
       mutate(k = as.numeric(k)) %>% ggplot(aes(x = k , ,y=m_score ,group=1)) + geom_line() +
         geom_ribbon( aes(ymin = m_score - sd_score, ymax=m_score + sd_score),alpha = 0.2 )  +
           theme(text = element_text(size = 20)) + xlim(1,high.lim) + xlab(x_lab) + ylab(paste("Clust Score (",score.type,")", sep="")) -> p
+  if(!return_df){
+    return(p)
+  }else{
+    pos.df %>% gather('k','score') %>% group_by(k) %>% summarise(sil = mean(score)) %>%
+      mutate(k = as.numeric(k)) %>% mutate(type = rep(id, dim(pos.df)[2])) %>% arrange(k) -> rand_df
+      return(rand_df)
+  }
+}
 
-  return(p)
+# Takes two values of k for positive controls
+# A single matrix of real expression data
+
+runControls<-function(i,k1 = 6, k2 =20){
+
+  max_k = 40
+
+  rand.input.matrix <- replicate(100,runEnsemblePositive(gene_matrix = mat.receptors, pos.control = F,max_k = max_k))
+  rand_df = makePlotEnsemble(rand.input.matrix, return_df = T, id = 'rand')
+
+
+  pos.control.matrix <- replicate(100,runEnsemblePositive(gene_matrix = mat.receptors, m = k1, pos.control = T,max_k = max_k))
+  pos_df_6 = makePlotEnsemble(pos.control.matrix, return_df = T, id = 'positive_6')
+
+
+
+  pos.control.matrix <- replicate(100,runEnsemblePositive(gene_matrix = mat.receptors, m = k2, pos.control = T,max_k = max_k))
+  pos_df_20 = makePlotEnsemble(pos.control.matrix, return_df = T, id = 'positive_20')
+
+
+  sil_data = rbind(rand_df, pos_df_6,pos_df_20)
+  #sil_data %>% ggplot(aes(x = k, y = sil, color = type)) + geom_point() + geom_path(size = 1.5) + theme_bw() + theme(text=element_text(size = 22))
+
+  return(sil_data)
 }
