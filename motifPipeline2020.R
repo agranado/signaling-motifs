@@ -88,15 +88,43 @@ avg.matrix<-function(seurat.obj,genes.list,by= "seurat_clusters",upper.case = T,
   data.to.plot$cell = rownames(data.to.plot)
   #we added 2 new fields, get the gene names by excluding them (or get the before)...
   genes.plot = colnames(data.to.plot)[1:(length(colnames(data.to.plot))-2)]
-
   data.to.plot %>% gather( key =genes.plot, c(genes.plot), value = expression) -> data.to.plot
-
-  data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression)) %>% spread(genes.plot,avg.exp) -> mean.expr.matrix
+  data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression)) %>%
+      spread(genes.plot,avg.exp) -> mean.expr.matrix
   mean.mat =as.matrix( mean.expr.matrix[,-1]); rownames(mean.mat)<-unlist(mean.expr.matrix[,by])
-
   #data.to.plot %>% dplyr::group_by_at(c(by, "genes.plot")) %>% dplyr::summarize(avg.exp = mean(expression),sd.exp = sd(expression))
 
   return(mean.mat)
+}
+
+# Percetage of expressing cells per cluster
+# For a given list of genes, this function returns a matrix of pct.exp
+# we can then use this matrix to filter data points before clustering
+pct.exp.matrix <- function(seurat.obj, genes.list, by ='seurat_clusters', upper.case = F ){
+
+  cellnames = rownames(seurat.obj@meta.data)
+  genenames = rownames(seurat.obj)
+
+
+  if(upper.case) genes.list = toupper(genes.list)
+
+
+  genes.list = genenames[which(toupper(genenames) %in% toupper(genes.list))]
+  # For percentag of expressing cells we use the counts instead of the normalized data.
+  data.to.plot = FetchData(seurat.obj, c(genes.list, 'seurat_clusters'), slot = 'counts')
+  data.to.plot$cell = rownames(data.to.plot)
+  data.to.plot %>% gather(key = genes.plot, genes.list, value = expression) %>%
+      group_by(seurat_clusters, genes.plot) %>%
+      summarise(pct.exp = sum(expression>0,na.rm = T)/n(), mean = mean(expression)) -> tidy.pathway
+
+
+  # Spread into matrix form
+  tidy.pathway %>% select(-mean)    %>%  spread(genes.plot,pct.exp, fill = 0 ) -> mean.expr.matrix
+  mean.mat =as.matrix( mean.expr.matrix[,-1]); rownames(mean.mat)<-unlist(mean.expr.matrix[,by])
+
+
+  return(mean.mat)
+
 }
 
 # We want to remove clusters that have no significan expression in at least x genes
