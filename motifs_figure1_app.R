@@ -97,7 +97,7 @@ server <- function(input, output){
   # MOTIF COLORS
   colors$motif_label  = makeQualitativePal(length(motifs_ann$motif_label %>% unique ))
 
-  names(colors$motif_label) <- motifs_ann$motif_label %>% unique() 
+  names(colors$motif_label) <- motifs_ann$motif_label %>% unique()
 
   # Barplot
   tidy_pathway = gather(raw_counts, "gene", "Expr", -c(global_cluster))
@@ -127,11 +127,6 @@ server <- function(input, output){
 
   ### MAKE PLOTS
 
-<<<<<<< HEAD
-  output$theheatmap = renderPlot({
-
-
-=======
   ## UI
   # this will render automatically
   output$checkbox <- renderUI({
@@ -142,7 +137,6 @@ server <- function(input, output){
   }) #output$checkbox will render a checkbox based on the dataset
 
   output$theheatmap = renderPlot({
->>>>>>> c682d1c180b35bed9ca16d6f318515eff9cf3f5e
     # 8. Final heatmap and save dendrogram
    pheatmap(t(x_mat), # with reactive it would be t(plotdata() )
                     clustering_distance_cols = 'euclidean',
