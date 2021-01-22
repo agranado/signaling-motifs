@@ -219,7 +219,7 @@ server <- function(input, output){
       ann_counts %>%  dplyr::filter(global_cluster == mouse_event$customdata) -> this_meta
       fig<- plot_ly(this_profile, x = ~gene, y = ~Expr, type   = 'bar')
       fig %>% layout(title = paste(this_meta$age, this_meta$Tissue,":",this_meta$cell_ontology_class, sep = " "),
-                yaxis = list(title = 'Norm Expression'
+                yaxis = list(title = 'Norm Expression',
                           range=c(0,1)
                         ),
                 xaxis = list(
