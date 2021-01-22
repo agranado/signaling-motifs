@@ -94,6 +94,12 @@ server <- function(input, output){
   motifs_ann$motif_label <- as.character(motifs_ann$motif_label) # for colors to show up
   row.names(motifs_ann)<- motifs_ann$global_cluster
 
+
+  # MOTIF COLORS
+  colors$motif_label  = makeQualitativePal(length(motifs_ann$motif_label %>% unique ))
+
+  names(colors$motif_label) <- motifs_ann$motif_label %>% unique() 
+
   #### FUNCTIONS
 
   data <- reactive({
@@ -117,6 +123,8 @@ server <- function(input, output){
   ### MAKE PLOTS
 
   output$theheatmap = renderPlot({
+
+
     # 8. Final heatmap and save dendrogram
    pheatmap(t(x_mat), # with reactive it would be t(plotdata() )
                     clustering_distance_cols = 'euclidean',
