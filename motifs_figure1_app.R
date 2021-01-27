@@ -81,30 +81,30 @@ server <- function(input, output){
   # 3D umap labeled by motif (includes all cells)
   motifs <- read.csv(file= 'app/global_transcriptome_motifLabeled.csv', sep =",", header= T)
 
-
-  x_mat<-as.matrix(raw_counts[-1])
-  row.names(x_mat) <- raw_counts$global_cluster # for heatmap
-
   # Merge with motif labels:
     # Note: this could be done before exporting the .csv
   motifs_fil <- motifs[motifs$motif_label>0, ] # only cell types with motif annotation
   motifs_fil$global_cluster <- as.character(motifs_fil$global_cluster)
-  ann_counts %>% left_join(motifs_fil %>% dplyr::select(global_cluster, motif_label), by='global_cluster') -> motifs_ann
+  # only profiles with label from recursive clsutering
+  ann_counts %>% dplyr::filter(global_cluster %in% motifs_fil$global_cluster) -> ann_counts
+  raw_counts %>% dplyr::filter(global_cluster %in% motifs_fil$global_cluster) -> raw_counts
+
+
+  x_mat<-as.matrix(raw_counts[-1])
+  row.names(x_mat) <- raw_counts$global_cluster # for heatmap
+
+
+  ann_counts %>% left_join(motifs_fil %>%
+            dplyr::select(global_cluster, motif_label), by='global_cluster') -> motifs_ann
   motifs_ann$motif_label <- as.character(motifs_ann$motif_label) # for colors to show up
   row.names(motifs_ann)<- motifs_ann$global_cluster
-
-
-  # MOTIF COLORS
-  colors$motif_label  = makeQualitativePal(length(motifs_ann$motif_label %>% unique ))
-
-  names(colors$motif_label) <- motifs_ann$motif_label %>% unique()
 
   # Barplot
   tidy_pathway = gather(raw_counts, "gene", "Expr", -c(global_cluster))
 
   # Colors
-  colors$motif_label = makeQualitativePal(length(motifs$motif_label %>% unique() ))
-  names(colors$motif_label) <- motifs$motif_label %>% unique %>% sort
+  colors$motif_label = makeQualitativePal(length(motifs_ann$motif_label %>% unique() ))
+  names(colors$motif_label) <- motifs_ann$motif_label %>% unique %>% sort
 
   ###############
   #### FUNCTIONS
@@ -139,7 +139,7 @@ server <- function(input, output){
   output$theheatmap = renderPlot({
     # 8. Final heatmap and save dendrogram
    pheatmap(t(x_mat), # with reactive it would be t(plotdata() )
-                    clustering_distance_cols = 'euclidean',
+                    clustering_distance_cols = dist.cosine(x_mat %>% as.matrix),
                     annotation_col = motifs_ann %>% dplyr::select( Tissue,dataset, motif_label),
                     clustering_method = 'ward.D2',
                     annotation_colors = colors,
@@ -162,7 +162,9 @@ server <- function(input, output){
     fig <- plot_ly(motifs, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3,
           marker = list(size = 3), color = ~Tissue,
           colors = colors$Tissue,
-          text=~paste("Tissue:",Tissue,"<br>Age:",age,"<br>dataset:",dataset,"<br>Cell type:", cell_ontology_class),
+          text=~paste("Tissue:",Tissue,"<br>Age:",age,"<br>dataset:",
+                        dataset,"<br>Cell type:", cell_ontology_class,
+                        "<br>Motif", motif_label),
           source = 'tissue_umap', customdata = ~global_cluster)
 
       fig %>% add_markers()
@@ -193,7 +195,9 @@ server <- function(input, output){
     fig <- plot_ly(motifs, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3,
           marker = list(size = 3), color = ~motif_id,
           colors = this_colors,
-          text=~paste("Tissue:",Tissue,"<br>Age:",age,"<br>dataset:",dataset,"<br>Cell type:", cell_ontology_class),
+          text=~paste("Tissue:",Tissue," Age:",age,"<br>dataset:",dataset,
+                      "<br>Cell type:", cell_ontology_class,
+                      "<br>Motif:", motif_label),
           source = 'main_umap', customdata = ~global_cluster)
 
       fig %>% add_markers()
