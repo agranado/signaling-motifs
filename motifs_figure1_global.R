@@ -16,7 +16,34 @@ makeMainDataFrame <-function(this_pathway){
   return(devel_adult)
 }
 
+# Make clustered data frame after 1st round of the Spectral pipeline
+
+makeMasterClustered <- function(p_list, k_opt = 40 ){
+		norm_counts <- p_list$counts %>% as.data.frame()
+		# save row.names as global cluster id
+		rownames_to_column(norm_counts, 'global_cluster') -> norm_counts
+
+		#Run the plotMotif3D to extract the 3D UMAP coordinates
+		scatter_export = plotMotif3D(p_clust = p_list$heatmap ,
+																	which_motif = 15,
+																	scatter.data,
+																	k_opt = k_opt,
+																	export_csv = T)
+
+		# Let's create a single master data frame with motif labels
+		scatter_export$global_cluster <- as.character(scatter_export$global_cluster)
+
+		# this will be already filtered
+		left_join(norm_counts, scatter_export, by ='global_cluster') %>%
+					dplyr::filter(motif_label>0) -> master_clustered
+
+		return(master_clustered)
+
+}
+
 # Clustering functions:
+
+
 
 # From the global data frame: extract pathway counts and perform Spectral clustering
 # it outputs the clustering by Spectral
@@ -432,7 +459,8 @@ makeHeatmap<-function(round2 = data.frame(),
 recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30, silh_cutoff = 0.5, master_clustered = data.frame(), n_iter = 9 ){
 
       # 6. Compile results from recursive clustering
-    recursive_res <- clusterRecursive(p_list, k_opt, min_s_default =silh_cutoff,master_clustered = master_clustered, max_iter = n_iter)
+    recursive_res <- clusterRecursive(p_list, k_opt, min_s_default =silh_cutoff,
+                                        master_clustered = master_clustered, max_iter = n_iter)
     all_clusters_recursive = recursive_res$recursive_labels
     remaining_profiles = recursive_res$remaining
 
@@ -442,10 +470,17 @@ recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30, silh_cu
     master_recursive_tidy = recursive_df_list$tidy
     label_map = recursive_df_list$label_map #data frame with global_cluster, motif_label, pathway_clust
 
+    # if there are less labels that the proposed number of final motifs,
+    # we overwrite the number of clusters and define n_motifs = n_recursive_labels
+    if(n_motifs>label_map$motif_label %>% unique() %>% length)
+       n_motifs = label_map$motif_label %>% unique() %>% length
 
     final_motifs_res = makeFinalMotifs(master_recursive_tidy, n_motifs = n_motifs, label_map)
     scatter_export2 = final_motifs_res$scatter_export
     recursive_master_labels = final_motifs_res$recursive_label
+    motif_matrix = final_motifs_res$motif_matrix # Expression matrix of average expressing within a recursive cluster
+    final_motifs_df = final_motifs_res$final_motifs # map with ID for recursive clustering and final motifs ID
+    p_motifs = final_motifs_res$p_motifs # heatmap object with the dendrogram corresponding to the final motif clustering (merging of recursive clusters)
 
     # 8. Final data.frame
     master_clustered %>%
@@ -458,7 +493,8 @@ recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30, silh_cu
     # df now contains ALL data for those datapoint that were classified during the recursive algorithm
     # UMAP, profiles, meta_data and cluster label
 
-    return(list(master = df, scatter_export = scatter_export2))
+    return(list(master = df, scatter_export = scatter_export2,
+                final_motifs = final_motifs_df, tree = p_motifs, recursive_tidy = master_recursive_tidy))
 }
 
 
@@ -476,7 +512,7 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5, master_clustered
 
   min_s <- c(0, 0.5,0.5,0.5, 0.5,0.5,0.5, 0.5, 0.5, 0.5) # test
   min_s <- c(0, 0.4,0.4,0.4, 0.4,0.4,0.4, 0.5, 0.5, 0.5) # original from notion
-
+  min_s <- c(0, 0.3,0.3,0.3, 0.3,0.3,0.3, 0.3, 0.3, 0.3) # for euclidean distance ( clusters have worse silhouette scores overall )
 
   #min_s_default = 0.5
   # from the first round (we use 0.5 to make it more stringent)
@@ -543,6 +579,53 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5, master_clustered
   return( list(recursive_labels = all_clusters_recursive, remaining= remaining_profiles) )
 } # clusterRecursive()
 
+# Silhoutte score for recursive iterations
+
+# This function receives a dataframe that was already filtered for low silhouette scores
+# It will re-cluster the gene expression profiles (which are included in the data.frame)
+# Main KEY = global_cluster
+
+# Output: 2 dataframes
+# Silh_res: results from the silhouette score for each cluster
+# round2: metadata annotated with the new cluster label as pathway_clust
+
+silh_recluster<-function(not_pass_clustered = data.frame() , k_r = 20,
+                        spec_method = 1, spec_kernel = 'density'){
+  # subset the clusters
+  count_mat_re = not_pass_clustered[,this_pathway] %>% as.matrix()
+  row.names(count_mat_re) <- not_pass_clustered$global_cluster
+  # keep row names as global clusters
+  meta_data_re = not_pass_clustered
+  row.names(meta_data_re) <- meta_data_re$global_cluster
+
+  # iterate the clustering pipeline
+  # Here we can specify all parameters for Spectrum
+  # and for the custom manualSpectral function
+  round2 <- reClusterPathway(count_mat = count_mat_re,
+                            meta_data = meta_data_re,
+                            k = k_r,
+                            spec_method = spec_method, spec_kernel = spec_kernel
+                            )
+
+  # create labels for round 2
+  #round2 %>% dplyr::mutate(motif_label = paste(pathway_clust,'b', sep = "")) -> round2
+
+  # Silhouette score requires numeric labels
+  #dist_mat <- dist.cosine(round2[,this_pathway] %>% as.matrix) %>% as.matrix
+  dist_mat <- dist(round2[,this_pathway] %>% as.matrix) %>% as.matrix #euclidean
+  round2_labels <- round2$pathway_clust %>% as.numeric
+  names(round2_labels) <- round2$global_cluster
+
+  s2 = silhouette(round2_labels, dist_mat)
+  silh_res2 = data.frame(label = s2[,1], silh = s2[,3] , neighbor = s2[,2])
+
+  silh_res2 %>% dplyr::group_by(label) %>%
+                dplyr::summarise(sm = mean(silh), n_data = n() ) %>%
+                arrange(desc(sm)) -> silh_res2
+
+  return(list( silh = silh_res2, labels = round2) )
+}
+
 # after recursive clustering we build a data frame with the new labels
 makeMasterRecursive <- function(all_clusters_recursive = list(), master_clustered = data.frame() ){
     # rbind the list of data.frames
@@ -586,7 +669,7 @@ makeFinalMotifs<-function(master_recursive_tidy = data.frame() , n_motifs =30, l
 
       pdf("final_motifs.pdf", height = 18, width = 6 )
       p_motifs <- pheatmap(x[,this_pathway],
-               clustering_distance_rows = dist.cosine(as.matrix(x)),
+               clustering_distance_rows = dist(as.matrix(x)),  # dist.cosine(as.matrix(x)),
                color = magma(100),
                border_color = NA,
       				 cluster_cols = F,
@@ -630,7 +713,8 @@ makeFinalMotifs<-function(master_recursive_tidy = data.frame() , n_motifs =30, l
 
       print("Main UMAP coordinates labeled with the new clusters")
 
-      return(list(scatter_export = scatter_export2, recursive_label = recursive_master_labels, motif_matrix = motif_matrix, final_motifs = final_motifs_df))
+      return(list(scatter_export = scatter_export2, recursive_label = recursive_master_labels,
+                      motif_matrix = motif_matrix, final_motifs = final_motifs_df, p_motifs = p_motifs))
 }
 # scatter export has a the UMAP coordinates and now, the new  recursive labels
 
@@ -654,17 +738,67 @@ interactiveHeatmap <- function(master_recursive = data.frame(), this_pathway ){
     return(x)
 }
 
+# Calculate silhouette score for a given clustering
+cluster_silhouette <-function(df = data.frame() , dist = 'euclidean' ){
+    #assumes that the data frame contains the pathway profiles in wide format
+    ## the input data.frame must contain global_cluster AND motif_label
+    ## motif_label must be numeric friendly
+		df %>% dplyr::select(c(this_pathway, global_cluster, motif_label)) -> df_mat
+
+		# silhouette requires numeric cluster labels
+		labs <- df_mat$motif_label %>% as.numeric()
+		names(labs) <- df_mat$global_cluster
+
+		x <- df_mat[,this_pathway] %>% as.matrix
+		row.names(x) <- df_mat$global_cluster
+		if(dist =='cosine'){
+			s<-silhouette(labs, dist.cosine(x))
+		}else if(dist=='euclidean'){
+			s<-silhouette(labs, dist(x))
+		}
+
+		s_df <- data.frame(motif_label = s[,1], silh = s[,3])
+		s_df <- s_df %>% dplyr::group_by(motif_label) %>%
+							dplyr::summarise(ms = mean(silh)) %>%
+							arrange(desc(ms)) %>% as.data.frame() %>%
+							left_join(df %>% dplyr::group_by(motif_label) %>% count, by="motif_label")
+
+		return(s_df)
+}
+
 # df now contains ALL data for those datapoint that were classified during the recursive algorithm
 # UMAP, profiles, meta_data and cluster label
+compareSilhouette<- function(master_clustered, df){
+    print("Silhouette scores calculated")
+    # 6. Compare the silhouette scores for Spectral (default) vs recursive
+    # silhoutte scores for the spectral and recursive methods
+    s1<-cluster_silhouette(master_clustered)
+    s2<-cluster_silhouette(df)
 
-print("Silhouette scores calculated")
-# 6. Compare the silhouette scores for Spectral (default) vs recursive
-# silhoutte scores for the spectral and recursive methods
-s1<-cluster_silhouette(master_clustered)
-s2<-cluster_silhouette(df)
+    plot(s1$ms, ylim = c(0,1),type = "o")
+    lines(s2$ms, type = "o", col = "red")
+    # we use the recursive clustering silhouette scores
+    # scatter_expor2 has the recursive labels for each profile
+    umap_stats <- makeUmapStats(scatter_export2 , s2)
+    return(umap_stats)
+}
 
-plot(s1$ms, ylim = c(0,1),type = "o")
-lines(s2$ms, type = "o", col = "red")
-# we use the recursive clustering silhouette scores
-# scatter_expor2 has the recursive labels for each profile
-umap_stats <- makeUmapStats(scatter_export2 , s2)
+
+# Export for App
+# 1.1 We need a new devel_adult object
+exporToShiny<-function(p_list, devel_adult, scatter_export){
+    # save the row.names as global_cluster id
+    rownames_to_column(devel_adult, 'global_cluster') -> devel_adult_ann # this is not normalized
+    norm_counts <- p_list$counts %>% as.data.frame()
+    # save row.names as global cluster id
+    rownames_to_column(norm_counts, 'global_cluster') -> norm_counts
+
+    # 2. Run the plotMotif3D to extract the 3D UMAP coordinates
+    #scatter_export = plotMotif3D(p_clust = p_list$heatmap , which_motif = 15, scatter.data,k_opt = k_opt, export_csv = T)
+    # 3. Save data frames so the app can access them. They must match on dimensions and pathway profiles
+    write.csv(scatter_export, file = "app/global_transcriptome_motifLabeled.csv", quote =F, row.names = T)
+    # 4. Meta data
+    write.csv(devel_adult_ann[p_list$fil_rows, ], file = "app/annotated_counts.csv", quote =F, row.names = T)
+    # normalized data (by sum of pathway genes)
+    write.csv(norm_counts[p_list$fil_rows,], file = "app/filtered_counts.csv", quote =F, row.names = T)
+}
