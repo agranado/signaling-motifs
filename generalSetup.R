@@ -17,9 +17,10 @@ firstup <- function(x) {
 }
 
 
-a = brewer.pal(9,'Blues')
-colors =colorRampPalette(a)
+#a = brewer.pal(9,'Blues')
+#colors =colorRampPalette(a)
 
+blues_pal<-colorRampPalette(brewer.pal(n = 9, name = 'BuPu'))
 
 # First step: calculate the average expression profile for each global cluster
 # For a given scRNA object AND a list of genes, it retrieves the average expression profiles for each cluster
@@ -132,7 +133,7 @@ my_tissue_colors = list(Tissue = c(
 #
 # #
 
-pathways_file_short = '/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/pathway_list2_oct2020_shortname.csv'
+#pathways_file_short = '/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/pathway_list2_oct2020_shortname.csv'
 
 all_pathways = read.csv(pathways_file_short, header = T, colClasses = 'character')
 pathway_genes = all_pathways$gene

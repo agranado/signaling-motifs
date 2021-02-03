@@ -25,7 +25,7 @@ ui <- fluidPage(
             tabPanel('Heatmap',
                      fluidRow(column(8, offset = 1,
                                      h2("Heatmap"),
-                                     plotOutput("theheatmap", width = "1200px", height = "400px"),
+                                     plotlyOutput("theheatmap", width = "1200px", height = "400px"),
                                     )
                             ), # fluidRow
 
@@ -136,15 +136,25 @@ server <- function(input, output){
 
   }) #output$checkbox will render a checkbox based on the dataset
 
-  output$theheatmap = renderPlot({
+  output$theheatmap = renderPlotly({
     # 8. Final heatmap and save dendrogram
-   pheatmap(t(x_mat), # with reactive it would be t(plotdata() )
-                    clustering_distance_cols = dist.cosine(x_mat %>% as.matrix),
-                    annotation_col = motifs_ann %>% dplyr::select( Tissue,dataset, motif_label),
-                    clustering_method = 'ward.D2',
-                    annotation_colors = colors,
-                    show_colnames = F, cluster_rows = F, fontsize = 12,
-                    cutree_cols = 10  , col = blues_pal(100))
+   # pheatmap(t(x_mat), # with reactive it would be t(plotdata() )
+   #                  clustering_distance_cols = dist(x_mat %>% as.matrix),
+   #                  annotation_col = motifs_ann %>% dplyr::select( Tissue,dataset, motif_label),
+   #                  clustering_method = 'ward.D2',
+   #                  annotation_colors = colors,
+   #                  show_colnames = F, cluster_rows = F, fontsize = 12,
+   #                  cutree_cols = 10  , col = blues_pal(100))
+
+
+      heatmaply(
+        t(x_mat),
+        seriate = 'OLO',
+        col_side_colors = motifs_ann %>% dplyr::select(motif_label),
+        Rowv =F,
+        colors  = blues_pal(100)
+      )
+
   })
 
 

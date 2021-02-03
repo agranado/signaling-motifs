@@ -56,15 +56,21 @@ clusterPathway<- function(
 		spec_method = 2,
 		spec_kernel = 'stsc',
 		unique_cell_types = F,
-		min_max = T){
+		min_max = T,
+    sum_norm = F,
+    sat_quantile = F,
+    sat_val = 0.99){
 
+  # sum_norm: normalize each profile by the sum of the pathway genes.
+  # min_max: min max scaling. don't use together with sum_norm
 
 	# 2. Basic clustering with cosine distance
 	# Returns count matrix and meta data
 	# we could remove this to speed up things..
 	p = plotAllProfiles(devel_adult = devel_adult, which_pathway = which_pathway, max_satu = max_satu,
 											filter_unique = unique_cell_types, min_expr = min_expr,
-											make_heatmap = F)
+											make_heatmap = F, norm_by_sum = sum_norm,
+                      saturate_quantile = sat_quantile, quant_threshold = sat_val )
 
 	# return objects
 	count_mat =p[[2]] # count matrix directly from devel_adult no filter or transform
@@ -86,7 +92,7 @@ clusterPathway<- function(
                               k_opt =k_opt)
 	# Plot heatmap with spectral matrix
 	spectral_dist = manual_res[[3]] # eigen matrix
-
+  # For the heatmap we saturate the signal:
 	count_mat_fil = count_mat
 	count_mat_fil[count_mat_fil>max_satu] = max_satu
 
@@ -135,16 +141,18 @@ reClusterPathway<- function(count_mat = matrix() ,
     #  3. This will output the metadata with the cluster label
 
       # 1. Run spectrum distance matrix
+      # k is the number of eigen-vectors
     spec_res = Spectrum(t(count_mat), maxk = k, showres = F,
                         method = spec_method,
                         kerneltype = spec_kernel)
 
-    # 5. Manual spectral clustering
-    manual_res = manualSpectral2(A = spec_res$similarity_matrix, labels = meta_data, k_opt =k_opt)
+    # 5. Manual spectral clustering (on k)
+    manual_res = manualSpectral2(A = spec_res$similarity_matrix, labels = meta_data, k_opt =k)
     # Plot heatmap with spectral matrix
     spectral_dist = manual_res[[3]]
 
     # 6. Cluster eigen-vector and create dendrogram
+    # ward.D2 seems to be a good option to cluster the eigen-matrix
     p_clust <- pheatmap(t(count_mat),
                         clustering_distance_cols = spectral_dist,
                         clustering_method = 'ward.D2',
@@ -168,7 +176,8 @@ plotAllProfiles<-function(devel_adult = data.frame(),
                           which_pathway =c('Bmpr1a', 'Bmpr2') , max_satu = 0.5,
 													dist_method ='cosine', min_expr = 0.2,
 													k_cut = 20, filter_unique =T, make_heatmap  =F,
-                          filter_type = 1){
+                          filter_type = 1, norm_by_sum = F,
+                          saturate_quantile = F, quant_threshold = 0.99){
 
 		my_colors_all<-colors
 		# warning: devel_adult is global
@@ -196,14 +205,34 @@ plotAllProfiles<-function(devel_adult = data.frame(),
     }else if(filter_type ==2){
     # Filter
     }
-    # Jan 2021: Normalize by
+    # Jan 2021: Normalize by total pathway activity (experimental)
     # x_fil is the matrix used by the heatmap
     # Here we normalize by max gene in pathway or by sum of pathway genes
     # we apply the normalization to all profiles. But we do filter by min.expresison when running the heatmaps
     # we also return the fil row list of fitered cell types
-    x_fil = apply(x, 1, function(x_r){x_r/sum(x_r)}  )
-    colnames(x_fil) <- row.names(x) # apply returns transposed matrix
-    x_fil = t(x_fil) # should work
+    if(norm_by_sum){
+      x_fil = apply(x, 1, function(x_r){x_r/sum(x_r)}  )
+      colnames(x_fil) <- row.names(x) # apply returns transposed matrix
+      x_fil = t(x_fil) # should work
+    }else{
+      x_fil = x # do nothing to the data and return the same matrix
+    }
+
+    # For min max normalization, outliers can bias the scaling
+    # Here we saturate the counts to the 0.99 percentile such that outliers above this value do not affect the max
+    # Each feature is saturated by their corresponding quantile
+
+    if(saturate_quantile){
+      max_sat_gene = apply(x, 2, quantile, quant_threshold) # starts from x
+      for(s in 1:dim(x)[2])
+        x[which(x[,s]>max_sat_gene[s]),s]<- max_sat_gene[s]
+
+      x_fil = x  # this is the matrix we are using now.
+      # be careful with applying multiple normalizations at the same time (not recommended)
+      # since the order might not be as expected by default
+      # Here I assume only this normalization will be used (followed by min.max downstream)
+    }
+
 		#for(i in 1:dim(x)[1])
 		#	x[i,] = x[i,]/max(x[i,]
 		# Find unique cell types
@@ -456,11 +485,15 @@ makeHeatmap<-function(round2 = data.frame(),
 ###################
 # main wrapper of the recursive algorithm
 # inputs are the 1st round from Spectrum + the meta data
-recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30, silh_cutoff = 0.5, master_clustered = data.frame(), n_iter = 9 ){
+recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30,
+                              silh_cutoff = 0.5,
+                              master_clustered = data.frame(), n_iter = 9,
+                              spectrum_kernel = 'density'){
 
       # 6. Compile results from recursive clustering
     recursive_res <- clusterRecursive(p_list, k_opt, min_s_default =silh_cutoff,
-                                        master_clustered = master_clustered, max_iter = n_iter)
+                                        master_clustered = master_clustered,
+                                        max_iter = n_iter,  spec_kernel = spectrum_kernel)
     all_clusters_recursive = recursive_res$recursive_labels
     remaining_profiles = recursive_res$remaining
 
@@ -500,7 +533,9 @@ recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30, silh_cu
 
 # runs as a script for now
 # calls plotMotif3D which has the meta data
-clusterRecursive <- function(p_list, k_opt, min_s_default =0.5, master_clustered = data.frame(),max_iter =  9){
+clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
+                            master_clustered = data.frame(),
+                            max_iter =  9, spec_kernel = 'density'){
   # 1. Run recursive clustering based on the 1st round of spectral
   # this can start right away after the pipeline
   # prepare parameters for the long run
@@ -508,7 +543,7 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5, master_clustered
   round_k <- c(0, 35,30,30, 30,20,20, 20, 20, 20)# test params
   round_k <- c(0, 35,30,25, 25,20,20, 15, 12, 20)# original from Notion
   #round_k <- c(0, 35,30,30, 30,20,20, 20, 20, 20)# test
-
+  round_k <- c(0, 50,50,50, 50,50,30, 30, 30, 20 )
 
   min_s <- c(0, 0.5,0.5,0.5, 0.5,0.5,0.5, 0.5, 0.5, 0.5) # test
   min_s <- c(0, 0.4,0.4,0.4, 0.4,0.4,0.4, 0.5, 0.5, 0.5) # original from notion
@@ -546,12 +581,14 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5, master_clustered
 
   	# 1. Re-cluster profiles that did not pass the threshold in the previous iteration
   	# for i =1 the previous iteration is the main pipeline.
-  	round2_res = silh_recluster(remaining_profiles, k_r = round_k[i])
+  	round2_res = silh_recluster(remaining_profiles, k_r = round_k[i], spec_kernel = spec_kernel)
   	# save results and new data fram with motif label
     # silhouette score is the average for that label
   	silh_res2 = round2_res$silh
     # Data.frame of individual profiles with their label for the current iteration
   	round2 = round2_res$labels
+    # return individual silhouette score for each data point
+    raw_silh = round2_res$raw_silh
   	# We take out the profiles that passed the score threshold
     silh_res2 %>% dplyr::filter(sm> min_s[i]) %>% pull(label) %>% as.character( ) -> which_labels_pass
   	# create motif_label column for compatibility with the 1st round of clustering
@@ -571,7 +608,9 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5, master_clustered
   	# save the profiles that didn't pass the threshold and iterate again
   	remaining_profiles = round2 %>% dplyr::filter(!pathway_clust %in% which_labels_pass)
   	print( paste('Run', i, 'finished. Profiles out: ', toString(dim(profiles_out)[1])))
-
+    # print data frame for those profiles that passed the silhouette threshold
+    print(  silh_res2 %>% dplyr::filter(sm> min_s[i]))
+    print(  raw_silh %>% dplyr::filter(label %in% which_labels_pass) %>% arrange(label, desc(silh))  ) # print scores for individual data.points
   } # For loop
 
   dev.off()
@@ -619,11 +658,16 @@ silh_recluster<-function(not_pass_clustered = data.frame() , k_r = 20,
   s2 = silhouette(round2_labels, dist_mat)
   silh_res2 = data.frame(label = s2[,1], silh = s2[,3] , neighbor = s2[,2])
 
+  # Here we exclude data points that don't pass a min silhouette score threshold
+  # They will be passed to the next round of clustering
+  # The average silh for good cluster should be higher after removing those individual points
+  #silh_res2$label[silh_res2$silh<0.2] = -1
+
   silh_res2 %>% dplyr::group_by(label) %>%
                 dplyr::summarise(sm = mean(silh), n_data = n() ) %>%
-                arrange(desc(sm)) -> silh_res2
+                arrange(desc(sm)) -> silh_res_summary
 
-  return(list( silh = silh_res2, labels = round2) )
+  return(list( silh = silh_res_summary, labels = round2, raw_silh = silh_res2) )
 }
 
 # after recursive clustering we build a data frame with the new labels
@@ -739,7 +783,7 @@ interactiveHeatmap <- function(master_recursive = data.frame(), this_pathway ){
 }
 
 # Calculate silhouette score for a given clustering
-cluster_silhouette <-function(df = data.frame() , dist = 'euclidean' ){
+cluster_silhouette <-function(df = data.frame() , this_pathway = c() , dist = 'euclidean' ){
     #assumes that the data frame contains the pathway profiles in wide format
     ## the input data.frame must contain global_cluster AND motif_label
     ## motif_label must be numeric friendly
@@ -768,12 +812,12 @@ cluster_silhouette <-function(df = data.frame() , dist = 'euclidean' ){
 
 # df now contains ALL data for those datapoint that were classified during the recursive algorithm
 # UMAP, profiles, meta_data and cluster label
-compareSilhouette<- function(master_clustered, df){
+compareSilhouette<- function(master_clustered, df, this_pathway = c()){
     print("Silhouette scores calculated")
     # 6. Compare the silhouette scores for Spectral (default) vs recursive
     # silhoutte scores for the spectral and recursive methods
-    s1<-cluster_silhouette(master_clustered)
-    s2<-cluster_silhouette(df)
+    s1<-cluster_silhouette(master_clustered, this_pathway)
+    s2<-cluster_silhouette(df, this_pathway, this_pathway)
 
     plot(s1$ms, ylim = c(0,1),type = "o")
     lines(s2$ms, type = "o", col = "red")
@@ -781,6 +825,20 @@ compareSilhouette<- function(master_clustered, df){
     # scatter_expor2 has the recursive labels for each profile
     umap_stats <- makeUmapStats(scatter_export2 , s2)
     return(umap_stats)
+}
+
+# Plot Individual heatmaps
+# Subset by dataset and make heatmaps for a given pathway
+makeSeparateHeatmaps<-function(devel_adult, this_pathway){
+  colors$dataset %>% unique -> data_classes
+  for(i in 1:length(data_classes)){
+    which_datasets = which(colors$dataset==data_classes[i])
+    slice_indexes <- meta_master %>% dplyr::filter(dataset %in% which_datasets) %>% dplyr::pull(global_cluster)
+    pheatmap(devel_adult[slice_indexes,this_pathway],
+        annotation_row = devel_adult %>% dplyr::select(Tissue),
+        annotation_colors = colors
+      )
+  }
 }
 
 
