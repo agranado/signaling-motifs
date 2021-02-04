@@ -10,6 +10,9 @@ library(Seurat)
 library(ggplot2)
 library(Spectrum)
 library(ClusterR)
+library(tibble)
+library(cluster)
+
 
 firstup <- function(x) {
   substr(x, 1, 1) <- toupper(substr(x, 1, 1))

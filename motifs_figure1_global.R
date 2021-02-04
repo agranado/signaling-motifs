@@ -325,14 +325,14 @@ plotMotif3D <- function(p_clust = p , which_motif = 1,
 # Diversity score based on the UMAP coordinates
 makeUmapStats <- function(scatter_export2 = data.frame(),
                           silh_scores = data.frame(),
-                          dist_method = 'umap', user_dist_matrix = matrix() ){
+                          dist_method = 'umap', user_dist_matrix = matrix() , this_pathway = c() ){
 	# make a distance matrix in the UMAP space
 	umap_mat <- scatter_export2 %>% dplyr::select(UMAP_1, UMAP_2, UMAP_3)
 	row.names(umap_mat) <- scatter_export2$global_cluster
 
 	# calculate silhouette score
-	if(length(data.frame() ) ==0)
-		rand_silh_scores  = cluster_silhouette(scatter_export2)
+	if(length(silh_scores ) ==0)
+		rand_silh_scores  = cluster_silhouette(scatter_export2, this_pathway)
 
 	#compute the distance in the umap space
   if(dist_method =='umap'){
@@ -488,12 +488,12 @@ makeHeatmap<-function(round2 = data.frame(),
 recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30,
                               silh_cutoff = 0.5,
                               master_clustered = data.frame(), n_iter = 9,
-                              spectrum_kernel = 'density'){
+                              spectrum_kernel = 'density', this_pathway = c()){
 
       # 6. Compile results from recursive clustering
     recursive_res <- clusterRecursive(p_list, k_opt, min_s_default =silh_cutoff,
                                         master_clustered = master_clustered,
-                                        max_iter = n_iter,  spec_kernel = spectrum_kernel)
+                                        max_iter = n_iter,  spec_kernel = spectrum_kernel, this_pathway = this_pathway )
     all_clusters_recursive = recursive_res$recursive_labels
     remaining_profiles = recursive_res$remaining
 
@@ -535,7 +535,7 @@ recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30,
 # calls plotMotif3D which has the meta data
 clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
                             master_clustered = data.frame(),
-                            max_iter =  9, spec_kernel = 'density'){
+                            max_iter =  9, spec_kernel = 'density', this_pathway = c() ){
   # 1. Run recursive clustering based on the 1st round of spectral
   # this can start right away after the pipeline
   # prepare parameters for the long run
@@ -543,11 +543,11 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
   round_k <- c(0, 35,30,30, 30,20,20, 20, 20, 20)# test params
   round_k <- c(0, 35,30,25, 25,20,20, 15, 12, 20)# original from Notion
   #round_k <- c(0, 35,30,30, 30,20,20, 20, 20, 20)# test
-  round_k <- c(0, 50,50,50, 50,50,30, 30, 30, 20 )
+  #round_k <- c(0, 50,50,50, 50,50,30, 30, 30, 20 )
 
   min_s <- c(0, 0.5,0.5,0.5, 0.5,0.5,0.5, 0.5, 0.5, 0.5) # test
   min_s <- c(0, 0.4,0.4,0.4, 0.4,0.4,0.4, 0.5, 0.5, 0.5) # original from notion
-  min_s <- c(0, 0.3,0.3,0.3, 0.3,0.3,0.3, 0.3, 0.3, 0.3) # for euclidean distance ( clusters have worse silhouette scores overall )
+  #min_s <- c(0, 0.3,0.3,0.3, 0.3,0.3,0.3, 0.3, 0.3, 0.3) # for euclidean distance ( clusters have worse silhouette scores overall )
 
   #min_s_default = 0.5
   # from the first round (we use 0.5 to make it more stringent)
@@ -558,7 +558,7 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
   #master_clustered <- makeMasterClustered(p_list, k_opt = k_opt)
 
   # 1.2 compute the silhouette scores for the original clustering
-  silh_res_sum <- cluster_silhouette(master_clustered)
+  silh_res_sum <- cluster_silhouette(master_clustered, this_pathway)
 
   silh_res_sum %>% dplyr::filter(ms<min_s_default) -> not_pass
   not_pass_clustered <- master_clustered %>%
