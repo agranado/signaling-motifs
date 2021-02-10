@@ -25,7 +25,7 @@ makeMasterClustered <- function(p_list, k_opt = 40 ){
 
 		#Run the plotMotif3D to extract the 3D UMAP coordinates
 		scatter_export = plotMotif3D(p_clust = p_list$heatmap ,
-																	which_motif = 15,
+																	which_motif = 1,
 																	scatter.data,
 																	k_opt = k_opt,
 																	export_csv = T)
@@ -59,7 +59,11 @@ clusterPathway<- function(
 		min_max = T,
     sum_norm = F,
     sat_quantile = F,
-    sat_val = 0.99){
+    sat_val = 0.99,
+    min_expr_single_cell = 0){
+
+  #filter more one gene: filter cell that only express 1 gene
+  #gene_min_expr: min value to consider a gene as ON, 0 by default means no filtering
 
   # sum_norm: normalize each profile by the sum of the pathway genes.
   # min_max: min max scaling. don't use together with sum_norm
@@ -70,7 +74,8 @@ clusterPathway<- function(
 	p = plotAllProfiles(devel_adult = devel_adult, which_pathway = which_pathway, max_satu = max_satu,
 											filter_unique = unique_cell_types, min_expr = min_expr,
 											make_heatmap = F, norm_by_sum = sum_norm,
-                      saturate_quantile = sat_quantile, quant_threshold = sat_val )
+                      saturate_quantile = sat_quantile, quant_threshold = sat_val,
+                      gene_min_expr = 0 )
 
 	# return objects
 	count_mat =p[[2]] # count matrix directly from devel_adult no filter or transform
@@ -80,6 +85,12 @@ clusterPathway<- function(
 	# 3. MinMax normalization before Spectral clustering
 	if(min_max)
 		count_mat <- min.maxNorm(count_mat)
+
+  # 3.1 After min.max normalization, we can filter cell types that express more than one gene
+  # This will prevent random pathways from creating clusters that only express one gene  (high silhouette high diversity)
+  # fil_rows is a vector of row names to be included in the downstream analysis
+  # if we want to further filter the matrix, we need to do an intersect with the second names vector
+  fil_rows = intersect(fil_rows , row.names(count_mat)[which(rowSums(count_mat > min_expr_single_cell ) >1)] )  # at least two genes expressed
 
 	# 4. Run spectrum distance matrix
 	spec_res = Spectrum(t(count_mat[fil_rows,]), maxk = k_opt, showres = F,
@@ -177,7 +188,8 @@ plotAllProfiles<-function(devel_adult = data.frame(),
 													dist_method ='cosine', min_expr = 0.2,
 													k_cut = 20, filter_unique =T, make_heatmap  =F,
                           filter_type = 1, norm_by_sum = F,
-                          saturate_quantile = F, quant_threshold = 0.99){
+                          saturate_quantile = F, quant_threshold = 0.99,
+                          gene_min_expr = 0.2){
 
 		my_colors_all<-colors
 		# warning: devel_adult is global
@@ -198,8 +210,11 @@ plotAllProfiles<-function(devel_adult = data.frame(),
     # FILTERING #####
     # Basic filtering by sum of all genes in the pathway
     # Filter non-expressing cell types
+    # Second layer of the filter makes sure that cells are expressing at least n genes
+    # with a min value indicated in the parameters
     if(filter_type ==1){
-  	   fil_rows = rowSums(x)>min_expr # For removing cell types
+      # For removing cell types with no expression OR cell types that only express one gene
+  	   fil_rows = rowSums(x)>min_expr & (rowSums(x > gene_min_expr  ) >1)
 		     fil_rows<-row.names(x)[fil_rows]
 		# Normalize by cell-type (use max value for a receptor as reference)
     }else if(filter_type ==2){
@@ -543,11 +558,11 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
   round_k <- c(0, 35,30,30, 30,20,20, 20, 20, 20)# test params
   round_k <- c(0, 35,30,25, 25,20,20, 15, 12, 20)# original from Notion
   #round_k <- c(0, 35,30,30, 30,20,20, 20, 20, 20)# test
-  #round_k <- c(0, 50,50,50, 50,50,30, 30, 30, 20 )
+  round_k <- c(0, 50,50,50, 50,50,30, 30, 30, 20 )
 
   min_s <- c(0, 0.5,0.5,0.5, 0.5,0.5,0.5, 0.5, 0.5, 0.5) # test
   min_s <- c(0, 0.4,0.4,0.4, 0.4,0.4,0.4, 0.5, 0.5, 0.5) # original from notion
-  #min_s <- c(0, 0.3,0.3,0.3, 0.3,0.3,0.3, 0.3, 0.3, 0.3) # for euclidean distance ( clusters have worse silhouette scores overall )
+  min_s <- c(0, 0.3,0.3,0.3, 0.3,0.3,0.3, 0.3, 0.3, 0.3) # for euclidean distance ( clusters have worse silhouette scores overall )
 
   #min_s_default = 0.5
   # from the first round (we use 0.5 to make it more stringent)
