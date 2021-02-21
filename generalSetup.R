@@ -75,18 +75,22 @@ makeQualitativePal <- function(n, rand_order = T, skip = 0, tail_colors = F){
 
   library(RColorBrewer)
   qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-  col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+  col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))) # only 70 qualitative colors 
   #pie(rep(1,n), col=sample(col_vector, n))
-  if(rand_order ==T){
-    return(sample(col_vector, n))
+  if(n<=length(col_vector)){
+      if(rand_order ==T){
+        return(sample(col_vector, n))
+      }else{
+        # to add diversity we can get the last n colors of the array. Useful when plotting two pathways
+        if(tail_colors){
+            x_col = tail(col_vector,n)
+        }else{
+            x_col  =col_vector[(1+skip):(n+skip)]
+        }
+        return(x_col)
+      }
   }else{
-    # to add diversity we can get the last n colors of the array. Useful when plotting two pathways
-    if(tail_colors){
-        x_col = tail(col_vector,n)
-    }else{
-        x_col  =col_vector[(1+skip):(n+skip)]
-    }
-    return(x_col)
+    return(c(col_vector,col_vector[1:(n-length(col_vector))]))
   }
 }
 

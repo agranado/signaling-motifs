@@ -18,18 +18,31 @@ makeMainDataFrame <-function(this_pathway, umap_coords = F){
   return(devel_adult)
 }
 
-# Same as above but normalizing with min max and saturation value
-normalizedDevel <- function(this_pathway, sat_val =0.99 ){
+normalizedDevel <- function(this_pathway, sat_val =0.99, fill_zero_rows = F ){
     devel_adult <- makeMainDataFrame(this_pathway) #pink variables go to Shiny
 
     devel_adult %>% mutate(cell_id = paste(global_cluster, dataset,sep="_")) -> devel_adult
 
     x =devel_adult[,this_pathway]
     max_sat_gene = apply(x, 2, quantile, sat_val) # starts from x
+
+
+		# are there any 0 sat values ?
+		if(sum(max_sat_gene==0)>0){
+			max_val_gene = apply(x, 2, max) # starts from x
+			max_sat_gene[max_sat_gene==0] <- max_val_gene[max_sat_gene==0]
+			}
+
     for(s in 1:dim(x)[2])
         x[which(x[,s]>max_sat_gene[s]),s]<- max_sat_gene[s]
 
-    devel_adult[,this_pathway] <- min.maxNorm(x)
+    x<- min.maxNorm(x)
+		if(fill_zero_rows)
+			x[x==0] = 10^-7
+
+		devel_adult[,this_pathway] <- x
+
+		row.names(devel_adult) <- devel_adult$global_cluster
     return(devel_adult)
 }
 # Make clustered data frame after 1st round of the Spectral pipeline
@@ -618,7 +631,7 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
   	# for i =1 the previous iteration is the main pipeline.
     # calculate k based on the number of remaining profiles:
     if(dim(remaining_profiles)[1] > 20){
-      round_k = round(dim(remaining_profiles)[1]/10) # aprox clusters of size  10 profiles
+      round_k = round(dim(remaining_profiles)[1]/cluster_factor) # aprox clusters of size  10 profiles
     }else{
       round_k = 2
     }
@@ -901,6 +914,63 @@ makeSeparateHeatmaps<-function(devel_adult, this_pathway){
       )
   }
 }
+
+
+
+# # # # # #
+# # # # # #
+# # # # # #
+# Hierarchical clusterin on recursive sub-clusters
+
+# Two functions to compute the silhouette score for a given proposed clustering
+# optimal k for recursive sub-clusters using the average profile for each label 
+silhoutte_hclust_optimalk <- function(recursive_res, return_mat = F, max_y = 0.4,
+																		min_y = 0.1){
+		# after running the pipeline
+		# Make average matrix across recursive labels
+		recursive_res$recursive_tidy  %>%
+		    group_by(motif_label.y, gene) %>%
+		    summarise(m_expr = mean(expr)) %>%
+		    spread(key =gene, value = m_expr) %>%
+		    as.data.frame -> motif_matrix
+
+		final_motifs_df <- recursive_res$final_motifs
+		p_motifs <- recursive_res$tree
+
+		x<-motif_matrix %>% tibble::column_to_rownames("motif_label.y")
+		row.names(x) <- motif_matrix$motif_label.y
+
+
+		if(!return_mat){
+			# inspect the number of clusters based on the recursive labels
+			tree = hclust(dist(x), method ='complete')
+			sapply(2:40, function(i){silhouette(cutree(tree, i), dist(x))[,3] %>% mean() } ) %>%
+	plot(type ="o", main= "Silhouette for sub-clusters", ylab ="silhouette",
+				xlab ="N clusters", ylim =c(min_y,max_y))
+			abline(h = 0.2);abline(h =0.3)
+		}else{
+			return(x)
+		}
+}
+
+# optimal k for recursive sub-clusters but using the individual profiles  + recursive labels
+silhouetteRecursive_celltypes <-function(recursive_res, this_pathway){
+
+		hms = c()
+		for(i in 2:40){
+		    master_hclust<- recluster_Hclust(recursive_res ,
+														master_recursive , this_pathway,
+														n_motifs = i)
+
+		    s_hclust <- cluster_silhouette(master_hclust, this_pathway)
+
+		    hms[i] = s_hclust$ms %>% mean()
+		}
+		return(hms)
+}
+
+
+
 
 
 # Export for App
