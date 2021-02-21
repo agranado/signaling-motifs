@@ -139,7 +139,7 @@ my_tissue_colors = list(Tissue = c(
 #pathways_file_short = '/home/agranado/MEGA/Caltech/rnaseq/groupMeeting2020/knn_oldmouse/pathway_list2_oct2020_shortname.csv'
 
 #all_pathways = read.csv(pathways_file_short, header = T, colClasses = 'character')
-pathway_genes = all_pathways$gene
+#pathway_genes = all_pathways$gene
 # # Fix the order for ploting Fig 1
 # bmp_mat = read.csv('Bmp_adult_raw_SCRAN.csv',header =T )
 # bmp_mat %>% select(all_of(bmp.order), tissue, cell_type, dataset) %>% write.csv('Bmp_adult_raw_SCRAN.csv', quote = F, row.names = F)
