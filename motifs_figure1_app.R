@@ -170,8 +170,8 @@ server <- function(input, output){
     colors<-makeColorsAll(meta_master, list() )
 
     fig <- plot_ly(motifs, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3,
-          marker = list(size = 3), color = ~Tissue,
-          colors = colors$Tissue,
+          marker = list(size = 3), color = ~Cell_class,
+          colors = colors$Cell_class,
           text=~paste("Tissue:",Tissue,"<br>Age:",age,"<br>dataset:",
                         dataset,"<br>Cell type:", cell_ontology_class,
                         "<br>Motif", motif_label),

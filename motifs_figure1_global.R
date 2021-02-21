@@ -6,16 +6,32 @@
 
 
 # General pipeline
-makeMainDataFrame <-function(this_pathway){
+makeMainDataFrame <-function(this_pathway, umap_coords = F){
   # We fetch the gene data from the seurat_obj
   # And merge with meta data
   pathway_matrix<-FetchData(master_seurat, this_pathway) # Log norm
-  devel_adult <- cbind(pathway_matrix, master_seurat@meta.data %>% dplyr::select(Tissue, age,dataset,cell_ontology_class))
+  devel_adult <- cbind(pathway_matrix, master_seurat@meta.data %>% dplyr::select(Tissue, age,dataset,cell_ontology_class, Cell_class))
   row.names(devel_adult)<-1:dim(devel_adult)[1]
 
+
+  devel_adult$global_cluster = 1:dim(devel_adult)[1] # here we haven't filtered anything. Comes directly from Seurat obj
   return(devel_adult)
 }
 
+# Same as above but normalizing with min max and saturation value
+normalizedDevel <- function(this_pathway, sat_val =0.99 ){
+    devel_adult <- makeMainDataFrame(this_pathway) #pink variables go to Shiny
+
+    devel_adult %>% mutate(cell_id = paste(global_cluster, dataset,sep="_")) -> devel_adult
+
+    x =devel_adult[,this_pathway]
+    max_sat_gene = apply(x, 2, quantile, sat_val) # starts from x
+    for(s in 1:dim(x)[2])
+        x[which(x[,s]>max_sat_gene[s]),s]<- max_sat_gene[s]
+
+    devel_adult[,this_pathway] <- min.maxNorm(x)
+    return(devel_adult)
+}
 # Make clustered data frame after 1st round of the Spectral pipeline
 
 makeMasterClustered <- function(p_list, k_opt = 40 ){
@@ -341,9 +357,7 @@ plotMotif3D <- function(p_clust = p , which_motif = 1,
 makeUmapStats <- function(scatter_export2 = data.frame(),
                           silh_scores = data.frame(),
                           dist_method = 'umap', user_dist_matrix = matrix() , this_pathway = c() ){
-	# make a distance matrix in the UMAP space
-	umap_mat <- scatter_export2 %>% dplyr::select(UMAP_1, UMAP_2, UMAP_3)
-	row.names(umap_mat) <- scatter_export2$global_cluster
+
 
 	# calculate silhouette score
 	if(length(silh_scores ) ==0)
@@ -351,6 +365,10 @@ makeUmapStats <- function(scatter_export2 = data.frame(),
 
 	#compute the distance in the umap space
   if(dist_method =='umap'){
+     # make a distance matrix in the UMAP space
+     umap_mat <- scatter_export2 %>% dplyr::select(UMAP_1, UMAP_2, UMAP_3)
+     row.names(umap_mat) <- scatter_export2$global_cluster
+
 	   dist_umap <- dist(umap_mat) %>% as.matrix()
   }else if(dist_method =='user') {
       #compute distance on transcriptome markers (from Seurat n = 600)
@@ -368,7 +386,7 @@ makeUmapStats <- function(scatter_export2 = data.frame(),
 		# which global_clusters in this motif
 		which_motif <- scatter_export2 %>%
 				dplyr::filter(motif_label == i) %>%
-				pull(global_cluster)
+				pull(global_cluster) %>% as.character() # we are using the global_cluster id as row.name
 
 		# subset distance matrix
 		d_motif<-dist_umap[which_motif, which_motif]
@@ -546,6 +564,11 @@ recursiveSpectral <- function(p_list = list(), k_opt = 30,n_motifs = 30,
 }
 
 
+
+## #  #  #
+##  #  #  #
+#### Recursive parameters
+
 # runs as a script for now
 # calls plotMotif3D which has the meta data
 clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
@@ -554,15 +577,9 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
   # 1. Run recursive clustering based on the 1st round of spectral
   # this can start right away after the pipeline
   # prepare parameters for the long run
-  round_ids<-c('a','b','c','d','e','f', 'g', 'h','i', 'j')
-  round_k <- c(0, 35,30,30, 30,20,20, 20, 20, 20)# test params
-  round_k <- c(0, 35,30,25, 25,20,20, 15, 12, 20)# original from Notion
-  #round_k <- c(0, 35,30,30, 30,20,20, 20, 20, 20)# test
-  round_k <- c(0, 50,50,50, 50,50,30, 30, 30, 20 )
-
-  min_s <- c(0, 0.5,0.5,0.5, 0.5,0.5,0.5, 0.5, 0.5, 0.5) # test
-  min_s <- c(0, 0.4,0.4,0.4, 0.4,0.4,0.4, 0.5, 0.5, 0.5) # original from notion
-  min_s <- c(0, 0.3,0.3,0.3, 0.3,0.3,0.3, 0.3, 0.3, 0.3) # for euclidean distance ( clusters have worse silhouette scores overall )
+  aa = letters[seq( from = 1, to = 26 )]
+  aa = c(aa, paste(aa, aa, sep=""), paste(aa, aa,aa, sep=""), paste(aa, aa,aa,aa,  sep=""))
+  round_ids = aa
 
   #min_s_default = 0.5
   # from the first round (we use 0.5 to make it more stringent)
@@ -592,11 +609,21 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
   remaining_profiles = not_pass_clustered
   pdf("recursive_clustering_heatmaps.pdf")
   # mainFor
-  for(i in 2:max_iter){
-
+  i = 2
+  min_s = 0.3
+  cluster_factor = 10
+  #for(i in 2:max_iter){
+  while(dim(remaining_profiles)[1]>cluster_factor){
   	# 1. Re-cluster profiles that did not pass the threshold in the previous iteration
   	# for i =1 the previous iteration is the main pipeline.
-  	round2_res = silh_recluster(remaining_profiles, k_r = round_k[i], spec_kernel = spec_kernel)
+    # calculate k based on the number of remaining profiles:
+    if(dim(remaining_profiles)[1] > 20){
+      round_k = round(dim(remaining_profiles)[1]/10) # aprox clusters of size  10 profiles
+    }else{
+      round_k = 2
+    }
+
+  	round2_res = silh_recluster(remaining_profiles, k_r = round_k, spec_kernel = spec_kernel)
   	# save results and new data fram with motif label
     # silhouette score is the average for that label
   	silh_res2 = round2_res$silh
@@ -605,8 +632,25 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
     # return individual silhouette score for each data point
     raw_silh = round2_res$raw_silh
   	# We take out the profiles that passed the score threshold
-    silh_res2 %>% dplyr::filter(sm> min_s[i]) %>% pull(label) %>% as.character( ) -> which_labels_pass
+    silh_res2 %>% dplyr::filter(sm> min_s) %>% pull(label) %>% as.character( ) -> which_labels_pass
   	# create motif_label column for compatibility with the 1st round of clustering
+    if(length(which_labels_pass)==0){
+      # When we get a round with no high quality clusters we reduce the threshold for silhouette score and the cluster factor for next round
+      min_s = 0.2
+      cluster_factor = 5
+      silh_res2 %>% dplyr::filter(sm> min_s) %>% pull(label) %>% as.character( ) -> which_labels_pass
+
+      if(length(which_labels_pass)==0){ # no high quality clusters even at silh =0.2 then break
+        print("no high quaility clusters found in this iteration. Finishing recursive clustering. ")
+        remaining_profiles = round2 # no filtering of labels. Last round. Exit
+        break
+
+      }else{
+        # reset the silhouette score for next round
+        min_s = 0.3
+      }
+    }
+
   	round2 %>%
   		dplyr::filter( pathway_clust %in% which_labels_pass) %>%
   		select(global_cluster, pathway_clust) %>%
@@ -616,7 +660,7 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
 
   	# Make heatmap to visualize the quality for clusters during this iteration
   	makeHeatmap(round2, which_labels_pass, this_pathway,
-  							title = paste('Clustering round', round_ids[i]) )
+  							title = paste('Clustering round', toString(i)) )
 
   	# Save the profiles that passed the threshold
   	all_clusters_recursive[[i]]<-profiles_out
@@ -624,8 +668,10 @@ clusterRecursive <- function(p_list, k_opt, min_s_default =0.5,
   	remaining_profiles = round2 %>% dplyr::filter(!pathway_clust %in% which_labels_pass)
   	print( paste('Run', i, 'finished. Profiles out: ', toString(dim(profiles_out)[1])))
     # print data frame for those profiles that passed the silhouette threshold
-    print(  silh_res2 %>% dplyr::filter(sm> min_s[i]))
+    print(  silh_res2 %>% dplyr::filter(sm> min_s))
     print(  raw_silh %>% dplyr::filter(label %in% which_labels_pass) %>% arrange(label, desc(silh))  ) # print scores for individual data.points
+
+    i = i+1
   } # For loop
 
   dev.off()
@@ -978,7 +1024,7 @@ cluster_pvals <- function(df_stats, null_df){
 }
 
 # Feb 12th: Alternatively we can compute the ecdf (p_values distribution)
-# for each individual pathway. This is probably a better comparison since 
+# for each individual pathway. This is probably a better comparison since
 # we want to know whether out target pathway is statistically significant as a pathway
 # as opposed to finding significance at the cluster level
 makeControl_df <- function(x = list() , dist_index = 1){
@@ -986,11 +1032,12 @@ makeControl_df <- function(x = list() , dist_index = 1){
     for(i in 1:length(cell_type_dist))
       cell_type_dist[[i]][[dist_index]]$batch = i
     # join by row all batches
-    # but now each batch should have a unique id so we can group later    
+    # but now each batch should have a unique id so we can group later
 	  rand_umap_stats_df<-do.call(rbind, lapply(cell_type_dist, function(x){x[[dist_index]]}  ) )
 
     # Filter NA values for singletons
   	rand_umap_stats_df %>% dplyr::filter(!is.na(umap_dist) & !is.na(umap_dist_sd)) -> rand_umap_stats_df
+    #rand_umap_stats_df$umap_dist[is.na(rand_umap_stats_df$umap_dist)] <- 0
 
 	  return(rand_umap_stats_df)
 
@@ -1001,30 +1048,30 @@ makeControl_df <- function(x = list() , dist_index = 1){
 runAllControls <- function(experiment = 'hvg'){
 
 
-      # 0. Select the control 
+      # 0. Select the control
       if(experiment =='hvg'){
         control_experiment = rand_silh_hvg_bmp_28clusters
       }else{
         control_experiment = rand_silh_all_bmp_28clusters
       }
 
-      # 1. Make df from the long list run 
+      # 1. Make df from the long list run
       control_28_clusters<-control_experiment %>% makeControl_df()
       # 1.1 we only consider clusters with positive silhouette score.
-      # (not doing it can bias the p-value since we can get large clusters with low S-score but 
+      # (not doing it can bias the p-value since we can get large clusters with low S-score but
       # the large size of the cluster can dominate the p-value)
       control_28_clusters<-control_28_clusters %>% dplyr::filter(ms >0)
 
-      # 2. Compute the p-vals for the target pathway df 
+      # 2. Compute the p-vals for the target pathway df
       final_stats_pathway<- cluster_pvals(umap_stats_recursive, control_28_clusters) %>% arrange(p_vals)
       # 3. Compute the p-vals for the null df (what does this actually mean)
       # This distribution considers a cluster across ALL samplings
       # it gives us the p-value for an individual cluster when compared to all possible
-      # clusterings for samples of size n_genes 
+      # clusterings for samples of size n_genes
       control_pvals <-cluster_pvals(control_28_clusters, control_28_clusters) %>% arrange(p_vals)
-      control_pvals <- control_pvals %>% mutate(adj_pval = p.adjust(p_vals, method ="BH")) 
+      control_pvals <- control_pvals %>% mutate(adj_pval = p.adjust(p_vals, method ="BH"))
 
-      final_stats_pathway <- final_stats_pathway %>% mutate(adj_pval = p.adjust(p_vals, method ="BH")) 
+      final_stats_pathway <- final_stats_pathway %>% mutate(adj_pval = p.adjust(p_vals, method ="BH"))
       final_stats_pathway$batch = 0 # for consistency
 
 
@@ -1037,7 +1084,7 @@ runAllControls <- function(experiment = 'hvg'){
           control_pvals %>% dplyr::filter(batch == i) -> this_sample
           distr = ecdf( this_sample$adj_pval)
           distr_mat[i, ] = distr(dist_axis)
-          
+
       }
 
       mean_control_ecdf <-data.frame( dist_axis = dist_axis, adj_pval = apply(distr_mat, 2, mean), batch = 0)
@@ -1045,10 +1092,10 @@ runAllControls <- function(experiment = 'hvg'){
 
 
 
-      ggplot(control_pvals , aes(adj_pval , group = batch)) + stat_ecdf(geom = "step", alpha = 0.01) + 
-        scale_x_continuous(trans='log10') + theme_minimal() + theme(text = element_text(size = 25)) + 
-        annotation_logticks(sides = 'b') + stat_ecdf(data = final_stats_pathway, aes(adj_pval), color = "hotpink3", size = 1.5) +  
+      ggplot(control_pvals , aes(adj_pval , group = batch)) + stat_ecdf(geom = "step", alpha = 0.01) +
+        scale_x_continuous(trans='log10') + theme_minimal() + theme(text = element_text(size = 25)) +
+        annotation_logticks(sides = 'b') + stat_ecdf(data = final_stats_pathway, aes(adj_pval), color = "hotpink3", size = 1.5) +
         geom_line(data = mean_control_ecdf, aes(x = dist_axis, y = adj_pval), size = 1.5 )  +
-        ylab("Fraction of profiles") + xlab("Adj p-value") + 
+        ylab("Fraction of profiles") + xlab("Adj p-value") +
         ggtitle("Motif enrichment in pathway") + coord_cartesian(xlim=c(0.005,1))
 }

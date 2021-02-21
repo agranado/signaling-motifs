@@ -572,16 +572,16 @@ ggplotPathway<-function(results,type = 'silh', pathway_name =''){
 
   control.df %>% rbind(bb) %>% ggplot(aes(x = k, y = m_score, color =data)) +
     geom_ribbon(data=control.df, aes(ymin = m_score - sd_score, ymax=m_score + sd_score),alpha = 0.2,color =NA) +
-      geom_line(size = 0.5) + theme_classic() + scale_colour_manual(values=c("black", "deeppink3")) + theme(text =element_text(size =8)) +
+      geom_line(size = 0.5) + theme_classic() + scale_colour_manual(values=c("black", "deeppink3")) + theme(text =element_text(size =15)) +
         xlab("N clusters") + ylab(paste("Clustering Score (",score.type, ")",sep="")) +
         theme(legend.position= legend.pos) +
-        theme(axis.text.x=element_text(size=10), axis.text.y = element_text(size =10)) +
+        theme(axis.text.x=element_text(size=15), axis.text.y = element_text(size =15)) +
         ggtitle(pathway_name)  -> p
 
   if(type=="wss"){
     p = p +   scale_y_continuous(trans='log10') +coord_cartesian(ylim=c(100,1000),xlim = c(2,20))
   }else if(type=="silh"){
-    p = p + coord_cartesian(xlim=c(3,high.lim))
+    p = p + coord_cartesian(xlim=c(4,high.lim))
   }
   return(p)
 }
