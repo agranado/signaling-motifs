@@ -60,7 +60,8 @@ makeMasterClustered <- function(p_list, k_opt = 40 ){
 																	export_csv = T)
 
 		# Let's create a single master data frame with motif labels
-		scatter_export$global_cluster <- as.character(scatter_export$global_cluster)
+    # here we add the rownames from the count matrix
+		scatter_export$global_cluster <- as.character(norm_counts$global_cluster)
 
 		# this will be already filtered
 		left_join(norm_counts, scatter_export, by ='global_cluster') %>%
@@ -365,6 +366,18 @@ plotMotif3D <- function(p_clust = p , which_motif = 1,
 		return(scatter.labeled)
 	}
 }
+
+pca_dist<- function(master_seurat, devel_adult = data.frame() ){
+
+  dist_pca = dist(Embeddings(master_seurat ,'pca')) %>% as.matrix()
+
+
+  row.names(dist_pca)<-devel_adult$global_cluster
+  colnames(dist_pca)<-devel_adult$global_cluster
+
+  return(dist_pca)
+}
+
 
 # Diversity score based on the UMAP coordinates
 makeUmapStats <- function(scatter_export2 = data.frame(),
@@ -923,7 +936,7 @@ makeSeparateHeatmaps<-function(devel_adult, this_pathway){
 # Hierarchical clusterin on recursive sub-clusters
 
 # Two functions to compute the silhouette score for a given proposed clustering
-# optimal k for recursive sub-clusters using the average profile for each label 
+# optimal k for recursive sub-clusters using the average profile for each label
 silhoutte_hclust_optimalk <- function(recursive_res, return_mat = F, max_y = 0.4,
 																		min_y = 0.1){
 		# after running the pipeline
@@ -959,7 +972,7 @@ silhouetteRecursive_celltypes <-function(recursive_res, this_pathway){
 		hms = c()
 		for(i in 2:40){
 		    master_hclust<- recluster_Hclust(recursive_res ,
-														master_recursive , this_pathway,
+														data.frame()  , this_pathway,
 														n_motifs = i)
 
 		    s_hclust <- cluster_silhouette(master_hclust, this_pathway)
@@ -969,10 +982,44 @@ silhouetteRecursive_celltypes <-function(recursive_res, this_pathway){
 		return(hms)
 }
 
+# Re-cluster the recursive sub-clusters
+recluster_Hclust <- function(recursive_res,master_recursive, this_pathway, n_motifs,clust_method ="complete" ){
+				# Make tidy data frame so we can average across clusters
+				#gather(df, c(this_pathway), key = "gene", value ="expr") %>%
+				#    filter(motif_label>0) %>% group_by(motif_label, gene) %>%
+				#    summarise(mean_expr = mean(expr)) %>%
+				#    spread(gene, mean_expr ) -> tidy_clustering
+
+				# after running the pipeline
+				# Make average matrix across recursive labels
+				recursive_res$recursive_tidy  %>%
+				    group_by(motif_label.y, gene) %>%
+				    summarise(m_expr = mean(expr)) %>%
+				    spread(key =gene, value = m_expr) %>%
+				    as.data.frame -> motif_matrix
+
+				x<-motif_matrix %>% tibble::column_to_rownames("motif_label.y")
+				# Hierarchical clustering on the 1st round of classes
+				dist_mat = dist(x)
+
+				tree = hclust(dist_mat, method =clust_method)
+				#n_motifs = 20 # based on the silhouette score
+				clust_h = cutree(tree, n_motifs)
+				hclust_labels = data.frame(hclust_final = clust_h , motif_label.y = names(clust_h))
+
+				#hclust_labels$motif_label %>% as.character() -> hclust_labels$motif_label.y
+
+				recursive_res$recursive_tidy  %>% spread(key =gene, value = expr) -> master_df
+
+			  master_df %>% left_join(hclust_labels, by ="motif_label.y") -> master_clustered_hclust
+				# Make final labels with the id: motif_labels
+				master_clustered_hclust %>%
+					mutate(motif_label = hclust_final) -> master_clustered_hclust
+				return( master_clustered_hclust)
+}
 
 
-
-
+# # # # #
 # Export for App
 # 1.1 We need a new devel_adult object
 exporToShiny<-function(p_list, devel_adult, scatter_export){
