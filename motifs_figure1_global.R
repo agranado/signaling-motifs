@@ -870,7 +870,7 @@ interactiveHeatmap <- function(master_recursive = data.frame(), this_pathway ){
 }
 
 # Calculate silhouette score for a given clustering
-cluster_silhouette <-function(df = data.frame() , this_pathway = c() , dist = 'euclidean' ){
+cluster_silhouette <-function(df = data.frame() , this_pathway = c() , dist = 'euclidean', return_singles = F ){
     #assumes that the data frame contains the pathway profiles in wide format
     ## the input data.frame must contain global_cluster AND motif_label
     ## motif_label must be numeric friendly
@@ -889,12 +889,16 @@ cluster_silhouette <-function(df = data.frame() , this_pathway = c() , dist = 'e
 		}
 
 		s_df <- data.frame(motif_label = s[,1], silh = s[,3])
-		s_df <- s_df %>% dplyr::group_by(motif_label) %>%
+		s_df_mean <- s_df %>% dplyr::group_by(motif_label) %>%
 							dplyr::summarise(ms = mean(silh)) %>%
 							arrange(desc(ms)) %>% as.data.frame() %>%
 							left_join(df %>% dplyr::group_by(motif_label) %>% count, by="motif_label")
-
-		return(s_df)
+    if(!return_singles){
+		  return(s_df_mean)
+    }else{
+      df$silh = s_df$silh
+      return(df)
+    }
 }
 
 # df now contains ALL data for those datapoint that were classified during the recursive algorithm
@@ -967,19 +971,32 @@ silhoutte_hclust_optimalk <- function(recursive_res, return_mat = F, max_y = 0.4
 }
 
 # optimal k for recursive sub-clusters but using the individual profiles  + recursive labels
-silhouetteRecursive_celltypes <-function(recursive_res, this_pathway){
+silhouetteRecursive_celltypes <-function(recursive_res, this_pathway, singles = F, cluster_range = 2:40){
 
 		hms = c()
-		for(i in 2:40){
+    s_dist = list()
+		for(i in cluster_range ){
 		    master_hclust<- recluster_Hclust(recursive_res ,
 														data.frame()  , this_pathway,
 														n_motifs = i)
 
-		    s_hclust <- cluster_silhouette(master_hclust, this_pathway)
+		    s_hclust <- cluster_silhouette(df = master_hclust, this_pathway, return_singles = singles)
 
-		    hms[i] = s_hclust$ms %>% mean()
-		}
-		return(hms)
+        if(!singles){
+		        hms[i] = s_hclust$ms %>% mean() # this is the mean of the mean silhouette
+
+        }else{
+            s_dist[[i]] = s_hclust$silh
+        }
+    }
+
+    if(!singles){
+		    return(hms)
+    }else{
+        #names(s_dist) <- as.character(cluster_range)
+        return(s_dist)
+    }
+
 }
 
 # Re-cluster the recursive sub-clusters
@@ -1018,6 +1035,9 @@ recluster_Hclust <- function(recursive_res,master_recursive, this_pathway, n_mot
 				return( master_clustered_hclust)
 }
 
+
+############################################################################################
+############################################################################################
 
 # # # # #
 # Export for App
