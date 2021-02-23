@@ -941,8 +941,8 @@ makeSeparateHeatmaps<-function(devel_adult, this_pathway){
 
 # Two functions to compute the silhouette score for a given proposed clustering
 # optimal k for recursive sub-clusters using the average profile for each label
-silhoutte_hclust_optimalk <- function(recursive_res, return_mat = F, max_y = 0.4,
-																		min_y = 0.1){
+silhoutte_hclust_optimalk <- function(recursive_res, metric = "euclidean", clust_method ="complete", return_mat = F, max_y = 0.4,
+																		min_y = 0.1, cluster_range = 2:40){
 		# after running the pipeline
 		# Make average matrix across recursive labels
 		recursive_res$recursive_tidy  %>%
@@ -960,8 +960,16 @@ silhoutte_hclust_optimalk <- function(recursive_res, return_mat = F, max_y = 0.4
 
 		if(!return_mat){
 			# inspect the number of clusters based on the recursive labels
-			tree = hclust(dist(x), method ='complete')
-			sapply(2:40, function(i){silhouette(cutree(tree, i), dist(x))[,3] %>% mean() } ) %>%
+
+      if(metric =="euclidean"){
+        dist_mat = dist(x)
+      }else{
+        dist_mat = dist.cosine(as.matrix(x))
+      }
+
+        tree = hclust(dist_mat , method = clust_method )
+
+			sapply(cluster_range, function(i){silhouette(cutree(tree, i), dist_mat )[,3] %>% mean() } ) %>%
 	plot(type ="o", main= "Silhouette for sub-clusters", ylab ="silhouette",
 				xlab ="N clusters", ylim =c(min_y,max_y))
 			abline(h = 0.2);abline(h =0.3)
@@ -971,19 +979,19 @@ silhoutte_hclust_optimalk <- function(recursive_res, return_mat = F, max_y = 0.4
 }
 
 # optimal k for recursive sub-clusters but using the individual profiles  + recursive labels
-silhouetteRecursive_celltypes <-function(recursive_res, this_pathway, singles = F, cluster_range = 2:40){
+silhouetteRecursive_celltypes <-function(recursive_res, this_pathway, singles = F, cluster_range = 2:40, metric = "euclidean", clust_method = "complete", filter_profiles = F, min_expr = 0.3){
 
 		hms = c()
     s_dist = list()
 		for(i in cluster_range ){
 		    master_hclust<- recluster_Hclust(recursive_res ,
 														data.frame()  , this_pathway,
-														n_motifs = i)
+														n_motifs = i, clust_method = clust_method, metric = metric , filter_low = filter_profiles , fil_threshold = min_expr )
 
-		    s_hclust <- cluster_silhouette(df = master_hclust, this_pathway, return_singles = singles)
+		    s_hclust <- cluster_silhouette(df = master_hclust, this_pathway, return_singles = singles, dist = metric)
 
         if(!singles){
-		        hms[i] = s_hclust$ms %>% mean() # this is the mean of the mean silhouette
+		        hms[i] = s_hclust$ms %>% median() # this is the mean of the mean silhouette
 
         }else{
             s_dist[[i]] = s_hclust$silh
@@ -1000,7 +1008,9 @@ silhouetteRecursive_celltypes <-function(recursive_res, this_pathway, singles = 
 }
 
 # Re-cluster the recursive sub-clusters
-recluster_Hclust <- function(recursive_res,master_recursive, this_pathway, n_motifs,clust_method ="complete" ){
+# assings labels to individual data.points
+
+recluster_Hclust <- function(recursive_res,master_recursive, this_pathway, n_motifs,clust_method ="complete" , metric = 'euclidean', filter_low = F, fil_threshold = 0.3){
 				# Make tidy data frame so we can average across clusters
 				#gather(df, c(this_pathway), key = "gene", value ="expr") %>%
 				#    filter(motif_label>0) %>% group_by(motif_label, gene) %>%
@@ -1016,8 +1026,23 @@ recluster_Hclust <- function(recursive_res,master_recursive, this_pathway, n_mot
 				    as.data.frame -> motif_matrix
 
 				x<-motif_matrix %>% tibble::column_to_rownames("motif_label.y")
-				# Hierarchical clustering on the 1st round of classes
-				dist_mat = dist(x)
+
+        # Here we can filter recursive labels with no expression that might introduce noise in the clustering
+
+        if(filter_low){
+
+          fil_pass = names(which(rowSums(x) > fil_threshold ))
+          # the names here are the recursive labels
+          x <- x[fil_pass, ]
+
+        }
+        # Hierarchical clustering on the 1st round of classes
+
+        if(metric=="euclidean"){
+				      dist_mat = dist(x)
+        }else{
+              dist_mat = dist.cosine(x %>% as.matrix )
+        }
 
 				tree = hclust(dist_mat, method =clust_method)
 				#n_motifs = 20 # based on the silhouette score
@@ -1028,10 +1053,18 @@ recluster_Hclust <- function(recursive_res,master_recursive, this_pathway, n_mot
 
 				recursive_res$recursive_tidy  %>% spread(key =gene, value = expr) -> master_df
 
+        # if we are filtering by recursive label, here we remove those labels that did not
+        # pass the min expression threshold and continue to produce the final data.frame with the filtered profiles
+        if(filter_low)
+          master_df %>% dplyr::filter( motif_label.y %in% hclust_labels$motif_label.y ) -> master_df
+
 			  master_df %>% left_join(hclust_labels, by ="motif_label.y") -> master_clustered_hclust
 				# Make final labels with the id: motif_labels
 				master_clustered_hclust %>%
 					mutate(motif_label = hclust_final) -> master_clustered_hclust
+        # the output data.frame contains individual profiles with their final labels after applying hclust on the recursive-labels
+        # this master_clustered data frame should be used from now on for all other functions.
+        # row.names won't match if compared to previous data structures
 				return( master_clustered_hclust)
 }
 

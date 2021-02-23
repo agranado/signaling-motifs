@@ -132,7 +132,7 @@ server <- function(input, output){
   output$checkbox <- renderUI({
     labels = motifs$motif_label %>% unique()
     choice = labels[labels>0] %>% sort()
-    checkboxGroupInput("checkbox","Select motif", choices = choice, selected = choice[1])
+    checkboxGroupInput("checkbox","Select motif", choices = choice, selected = choice[1:10])
 
   }) #output$checkbox will render a checkbox based on the dataset
 
@@ -234,7 +234,7 @@ server <- function(input, output){
       fig<- plot_ly(this_profile, x = ~gene, y = ~Expr, type   = 'bar')
       fig %>% layout(title = paste(this_meta$age, this_meta$Tissue,":",this_meta$cell_ontology_class, sep = " "),
                 yaxis = list(title = 'Norm Expression',
-                          range=c(0,1)
+                          range=c(0,max(this_profile$Expr))
                         ),
                 xaxis = list(
                           title ='Gene'
